@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Config } from './config.ts';
-import type { Store } from './store.ts';
+import type { Store, SessionRow } from './store.ts';
 import { buildDeckMcp } from './deckTools.ts';
 
 /**
@@ -61,6 +61,17 @@ export class SessionManager extends EventEmitter {
     super();
   }
 
+  private emitTask(sess: SessionRow, status: 'active' | 'idle' | 'errored', result: string | null): void {
+    if (sess.kind !== 'task') return; // only tasks broadcast on the events channel
+    this.emit('task', {
+      id: sess.id,
+      source_kind: sess.source_kind ?? null,
+      source_id: sess.source_id ?? null,
+      status,
+      result,
+    });
+  }
+
   isActive(id: string): boolean {
     return this.active.has(id);
   }
@@ -88,6 +99,7 @@ export class SessionManager extends EventEmitter {
 
     this.active.add(sessionId);
     this.store.setStatus(sessionId, 'active');
+    this.emitTask(sess, 'active', null);
 
     // Auto-title from the first user prompt (only-if-null, so it sticks).
     if (!sess.title) {
@@ -155,13 +167,19 @@ export class SessionManager extends EventEmitter {
         this.record(sessionId, String(msg?.type ?? 'unknown'), msg);
       }
       this.store.setStatus(sessionId, 'idle');
+      this.store.finishRun(sessionId, 'success');
+      this.emitTask(sess, 'idle', 'success');
     } catch (err) {
       if (ac.signal.aborted) {
         this.record(sessionId, 'cancelled', { message: 'cancelled by user' });
         this.store.setStatus(sessionId, 'idle');
+        this.store.finishRun(sessionId, 'cancelled');
+        this.emitTask(sess, 'idle', 'cancelled');
       } else {
         this.record(sessionId, 'error', { message: err instanceof Error ? err.message : String(err) });
         this.store.setStatus(sessionId, 'errored');
+        this.store.finishRun(sessionId, 'error');
+        this.emitTask(sess, 'errored', 'error');
         throw err;
       }
     } finally {

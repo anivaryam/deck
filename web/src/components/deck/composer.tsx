@@ -65,15 +65,35 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Persist draft on every value change.
+  // Mirror the live value in a ref so the session-switch / unmount effects can
+  // persist it without re-subscribing to every keystroke (which would race the
+  // sessionId change).
+  const valueRef = useRef(value);
   useEffect(() => {
-    saveDraft(sessionId, value);
-  }, [sessionId, value]);
+    valueRef.current = value;
+  }, [value]);
 
-  // When sessionId changes (switching chats), load the new session's draft.
+  // Track the session the current draft belongs to. On switch, save the
+  // outgoing draft under its OWN id before loading the incoming one — this
+  // avoids the stale-value overwrite race when sessionId and value change
+  // together.
+  const prevSession = useRef(sessionId);
   useEffect(() => {
-    setValue(loadDraft(sessionId));
+    if (prevSession.current !== sessionId) {
+      saveDraft(prevSession.current, valueRef.current);
+      prevSession.current = sessionId;
+      setValue(loadDraft(sessionId));
+    }
   }, [sessionId]);
+
+  // Persist the current draft when the composer unmounts (e.g. navigating to
+  // tickets/tasks/cron) so typed-but-unsent text survives the round trip.
+  useEffect(
+    () => () => {
+      saveDraft(prevSession.current, valueRef.current);
+    },
+    [],
+  );
 
   // Auto-grow with the content: collapse to measure, then snap to scrollHeight.
   // CSS max-height caps it; past the cap the textarea scrolls internally.
@@ -230,7 +250,10 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
           <textarea
             ref={ref}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              saveDraft(sessionId, e.target.value);
+            }}
             onKeyDown={onKey}
             onPaste={onPaste}
             rows={1}

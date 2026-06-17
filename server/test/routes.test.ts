@@ -123,4 +123,88 @@ describe('protected routes', () => {
     });
     expect(detail.json().model).toBe('claude-haiku-4-5-20251001');
   });
+
+  it('persists effort when creating a session with effort field', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { cookie: cookieHeader },
+      payload: { project: 'alpha', effort: 'max' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().effort).toBe('max');
+  });
+
+  it('rejects an invalid effort value', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { cookie: cookieHeader },
+      payload: { project: 'alpha', effort: 'ultra' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/effort/);
+  });
+
+  it('PATCH /api/sessions/:id updates disabled tools', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { cookie: cookieHeader },
+      payload: { project: 'alpha' },
+    });
+    const id = created.json().id;
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/sessions/${id}`,
+      headers: { cookie: cookieHeader },
+      payload: { disabledTools: ['Bash', 'WebFetch'] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(JSON.parse(patched.json().disabled_tools)).toEqual(['Bash', 'WebFetch']);
+  });
+
+  it('PATCH rejects unknown tool names', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { cookie: cookieHeader },
+      payload: { project: 'alpha' },
+    });
+    const id = created.json().id;
+
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: `/api/sessions/${id}`,
+      headers: { cookie: cookieHeader },
+      payload: { disabledTools: ['rm -rf', 'Bash'] },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error).toMatch(/disabledTools/);
+  });
+
+  it('PATCH on an unknown session is 404', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/sessions/does-not-exist',
+      headers: { cookie: cookieHeader },
+      payload: { disabledTools: ['Bash'] },
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });

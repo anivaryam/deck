@@ -16,6 +16,9 @@ export interface SessionRow {
   prompt: string | null;
   origin: SessionOrigin;
   model: string | null;
+  effort: string | null;
+  /** JSON array of built-in tool names to disable for this session (disallowedTools). */
+  disabled_tools: string | null;
   created_at: number;
 }
 
@@ -95,6 +98,7 @@ export class Store {
     setResume: Database.Statement;
     setStatus: Database.Statement;
     setTitle: Database.Statement;
+    setDisabledTools: Database.Statement;
     insertCron: Database.Statement;
     getCron: Database.Statement;
     listCron: Database.Statement;
@@ -147,6 +151,8 @@ export class Store {
       ['prompt', `ALTER TABLE session ADD COLUMN prompt TEXT`],
       ['origin', `ALTER TABLE session ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'`],
       ['model', `ALTER TABLE session ADD COLUMN model TEXT`],
+      ['effort', `ALTER TABLE session ADD COLUMN effort TEXT`],
+      ['disabled_tools', `ALTER TABLE session ADD COLUMN disabled_tools TEXT`],
     ];
     for (const [name, sql] of additions) {
       if (!existing.has(name)) this.db.exec(sql);
@@ -170,12 +176,12 @@ export class Store {
     const db = this.db;
     this.stmts = {
       insertSession: db.prepare(
-        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, created_at)
-         VALUES (?, ?, ?, NULL, 'idle', 'chat', NULL, 'manual', ?, ?)`,
+        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, created_at)
+         VALUES (?, ?, ?, NULL, 'idle', 'chat', NULL, 'manual', ?, ?, ?, ?)`,
       ),
       insertTask: db.prepare(
-        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, created_at)
-         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?)`,
+        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, created_at)
+         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?)`,
       ),
       getSession: db.prepare(`SELECT * FROM session WHERE id = ?`),
       listAll: db.prepare(`SELECT * FROM session ORDER BY created_at DESC, rowid DESC`),
@@ -189,6 +195,7 @@ export class Store {
       setStatus: db.prepare(`UPDATE session SET status = ? WHERE id = ?`),
       // Only-if-null: auto-title sets the first title, never clobbers a real one.
       setTitle: db.prepare(`UPDATE session SET title = ? WHERE id = ? AND title IS NULL`),
+      setDisabledTools: db.prepare(`UPDATE session SET disabled_tools = ? WHERE id = ?`),
       insertCron: db.prepare(
         `INSERT INTO cron (id, schedule, project_path, prompt, enabled, last_run_at, last_session_id, created_at)
          VALUES (?, ?, ?, ?, 1, NULL, NULL, ?)`,
@@ -214,10 +221,24 @@ export class Store {
     this.db.close();
   }
 
-  create(input: { projectPath: string; title?: string; model?: string }): SessionRow {
+  create(input: {
+    projectPath: string;
+    title?: string;
+    model?: string;
+    effort?: string;
+    disabledTools?: string[];
+  }): SessionRow {
     const id = randomUUID();
     const created_at = Date.now();
-    this.stmts.insertSession.run(id, input.projectPath, input.title ?? null, input.model ?? null, created_at);
+    this.stmts.insertSession.run(
+      id,
+      input.projectPath,
+      input.title ?? null,
+      input.model ?? null,
+      input.effort ?? null,
+      input.disabledTools && input.disabledTools.length ? JSON.stringify(input.disabledTools) : null,
+      created_at,
+    );
     return this.get(id)!;
   }
 
@@ -239,6 +260,8 @@ export class Store {
     origin: SessionOrigin;
     title?: string;
     model?: string;
+    effort?: string;
+    disabledTools?: string[];
   }): SessionRow {
     const id = randomUUID();
     const created_at = Date.now();
@@ -249,6 +272,8 @@ export class Store {
       input.prompt,
       input.origin,
       input.model ?? null,
+      input.effort ?? null,
+      input.disabledTools && input.disabledTools.length ? JSON.stringify(input.disabledTools) : null,
       created_at,
     );
     return this.get(id)!;
@@ -285,6 +310,11 @@ export class Store {
 
   setStatus(id: string, status: SessionStatus): void {
     this.stmts.setStatus.run(status, id);
+  }
+
+  /** Replace the per-session disabled-tools set. Empty array clears it (null). */
+  setDisabledTools(id: string, tools: string[]): void {
+    this.stmts.setDisabledTools.run(tools.length ? JSON.stringify(tools) : null, id);
   }
 
   createCron(i: { schedule: string; projectPath: string; prompt: string }): CronRow {

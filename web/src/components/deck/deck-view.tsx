@@ -12,11 +12,11 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { useSocket } from "@/lib/ws";
 import { eventsToMessages } from "@/lib/adapt";
-import { MODELS } from "@/lib/static-data";
+import { EFFORTS, MODELS } from "@/lib/static-data";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { ImageAttachment, Model } from "@/lib/types";
+import type { EffortLevel, ImageAttachment, Model, Session } from "@/lib/types";
 
 // A cold-start prompt (sent from "/") creates a session then navigates to
 // "/$threadId", which remounts this component. The queued prompt is stashed at
@@ -50,6 +50,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState<Model>(MODELS[0]);
+  const [effort, setEffort] = useState<EffortLevel>("high");
 
   const { messages: raw, busy, connected, sendPrompt, cancel } = useSocket(activeThreadId ?? null);
   const messages = useMemo(() => eventsToMessages(raw), [raw]);
@@ -124,7 +125,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   ) {
     let s;
     try {
-      s = await api.createSession(projectName, model.id);
+      s = await api.createSession(projectName, { model: model.id, effort });
     } catch (err) {
       if ((err as { status?: number })?.status === 401) {
         navigate({ to: "/login" });
@@ -182,6 +183,50 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       ? tildify(projects[0].path)
       : undefined;
   const activeModelId = activeSession?.model ?? model.id;
+  // Effort is locked at session creation (like model). Show the active session's
+  // locked value when there is one; otherwise the pending choice for the next chat.
+  const sessionEffort = (activeSession?.effort as EffortLevel | undefined) ?? undefined;
+
+  // Per-session disabled tools (the settings-panel toggles). Parse defensively.
+  const disabledTools = useMemo<string[]>(() => {
+    const raw = activeSession?.disabled_tools;
+    if (!raw) return [];
+    try {
+      const a = JSON.parse(raw);
+      return Array.isArray(a) ? a.filter((t): t is string => typeof t === "string") : [];
+    } catch {
+      return [];
+    }
+  }, [activeSession?.disabled_tools]);
+
+  async function handleToolsChange(next: string[]) {
+    if (!activeThreadId) return;
+    // Optimistic: patch the cached session immediately so the switch flips with no lag.
+    qc.setQueryData<Session[]>(["sessions"], (old) =>
+      old?.map((s) => (s.id === activeThreadId ? { ...s, disabled_tools: JSON.stringify(next) } : s)),
+    );
+    try {
+      await api.setSessionTools(activeThreadId, next);
+    } catch (err) {
+      if ((err as { status?: number })?.status === 401) {
+        navigate({ to: "/login" });
+        return;
+      }
+      toast.error(`Couldn't update tools: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      qc.invalidateQueries({ queryKey: ["sessions"] });
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } catch {
+      /* best-effort: clear client state regardless */
+    }
+    qc.clear();
+    navigate({ to: "/login" });
+  }
 
   // The project to keep expanded by default: the active session's, or — with no
   // active session — the most recent session's ("last open project").
@@ -270,7 +315,18 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
               isTablet && !isDesktop ? "w-[360px]" : "w-[85vw] max-w-[360px]",
             )}
           >
-            <SettingsPanel models={MODELS} activeModelId={activeModelId} />
+            <SettingsPanel
+              models={MODELS}
+              activeModelId={activeModelId}
+              efforts={EFFORTS}
+              effort={effort}
+              sessionEffort={sessionEffort}
+              onEffortChange={setEffort}
+              disabledTools={disabledTools}
+              toolsEditable={!!activeThreadId}
+              onToolsChange={handleToolsChange}
+              onLogout={handleLogout}
+            />
           </SheetContent>
         </Sheet>
       </div>

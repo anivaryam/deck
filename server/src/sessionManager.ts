@@ -112,12 +112,25 @@ export class SessionManager extends EventEmitter {
 
     try {
       const mode = this.cfg.permissionMode || 'bypassPermissions';
+      // Per-session tool gating (the settings-panel toggles). Parse defensively —
+      // a corrupt value must not kill a turn; treat it as "nothing disabled".
+      let disallowedTools: string[] = [];
+      if (sess.disabled_tools) {
+        try {
+          const parsed = JSON.parse(sess.disabled_tools);
+          if (Array.isArray(parsed)) disallowedTools = parsed.filter((t): t is string => typeof t === 'string');
+        } catch {
+          /* ignore malformed value */
+        }
+      }
       const options: Record<string, unknown> = {
         cwd: sess.project_path,
         model: sess.model || this.cfg.model,
         systemPrompt: ARTIFACT_SYSTEM_PROMPT,
         permissionMode: mode,
         abortController: ac,
+        ...(sess.effort ? { effort: sess.effort } : {}),
+        ...(disallowedTools.length ? { disallowedTools } : {}),
         mcpServers: { deck: buildDeckMcp(this.store, sess.project_path) },
       };
       // Only skip permission checks when explicitly in bypass mode. Set

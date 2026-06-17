@@ -58,12 +58,31 @@ export const api = {
   async session(id: string): Promise<Session> {
     return json(await fetch(`/api/sessions/${id}`, { credentials: "same-origin" }));
   },
-  async createSession(project: string, model?: string, title?: string): Promise<Session> {
+  async createSession(
+    project: string,
+    opts: { model?: string; effort?: string; title?: string } = {},
+  ): Promise<Session> {
+    const { model, effort, title } = opts;
     return json(
       await fetch("/api/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ project, title, ...(model ? { model } : {}) }),
+        body: JSON.stringify({
+          project,
+          ...(title ? { title } : {}),
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
+        }),
+        credentials: "same-origin",
+      }),
+    );
+  },
+  async setSessionTools(id: string, disabledTools: string[]): Promise<Session> {
+    return json(
+      await fetch(`/api/sessions/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ disabledTools }),
         credentials: "same-origin",
       }),
     );

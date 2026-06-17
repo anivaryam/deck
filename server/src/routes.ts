@@ -28,6 +28,23 @@ function isValidModel(m: unknown): boolean {
   return typeof m === 'string' && m.length <= 100 && /^claude[A-Za-z0-9._:-]+$/.test(m);
 }
 
+/** Reasoning-effort levels the Agent SDK accepts (sdk.d.ts: EffortLevel). */
+const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+function isValidEffort(e: unknown): boolean {
+  return typeof e === 'string' && EFFORT_LEVELS.has(e);
+}
+
+/** Built-in tools the settings panel can gate per session (forwarded as the SDK's
+ *  `disallowedTools`). Allowlisted so a client can't inject arbitrary strings. */
+const GATEABLE_TOOLS = new Set(['Read', 'Write', 'Edit', 'Bash', 'Grep', 'WebFetch', 'WebSearch']);
+/** Validate + normalize a disabled-tools list. Returns null when invalid. */
+function cleanDisabledTools(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  if (v.length > GATEABLE_TOOLS.size) return null;
+  for (const t of v) if (typeof t !== 'string' || !GATEABLE_TOOLS.has(t)) return null;
+  return [...new Set(v as string[])];
+}
+
 const FILE_CT: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -112,19 +129,44 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     return { ...s, events: store.eventsSince(req.params.id, 0) };
   });
 
-  app.post<{ Body: { project?: string; title?: string; model?: string } }>('/api/sessions', async (req, reply) => {
-    const project = req.body?.project;
-    if (!project) return reply.code(400).send({ error: 'project required' });
-    if (req.body?.model !== undefined && !isValidModel(req.body.model)) {
-      return reply.code(400).send({ error: 'invalid model' });
+  app.post<{ Body: { project?: string; title?: string; model?: string; effort?: string; disabledTools?: unknown } }>(
+    '/api/sessions',
+    async (req, reply) => {
+      const project = req.body?.project;
+      if (!project) return reply.code(400).send({ error: 'project required' });
+      if (req.body?.model !== undefined && !isValidModel(req.body.model)) {
+        return reply.code(400).send({ error: 'invalid model' });
+      }
+      if (req.body?.effort !== undefined && !isValidEffort(req.body.effort)) {
+        return reply.code(400).send({ error: 'invalid effort' });
+      }
+      let disabledTools: string[] | undefined;
+      if (req.body?.disabledTools !== undefined) {
+        const clean = cleanDisabledTools(req.body.disabledTools);
+        if (!clean) return reply.code(400).send({ error: 'invalid disabledTools' });
+        disabledTools = clean;
+      }
+      let projectPath: string;
+      try {
+        projectPath = resolveProjectPath(projectsRoots, project);
+      } catch (err) {
+        return reply.code(400).send({ error: err instanceof Error ? err.message : 'invalid project' });
+      }
+      return store.create({ projectPath, title: req.body?.title, model: req.body?.model, effort: req.body?.effort, disabledTools });
+    },
+  );
+
+  // Update mutable per-session settings (currently: the tool-gating toggles).
+  // Applied on the session's next turn (SessionManager rebuilds options each send).
+  app.patch<{ Params: { id: string }; Body: { disabledTools?: unknown } }>('/api/sessions/:id', async (req, reply) => {
+    const s = store.get(req.params.id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    if (req.body?.disabledTools !== undefined) {
+      const clean = cleanDisabledTools(req.body.disabledTools);
+      if (!clean) return reply.code(400).send({ error: 'invalid disabledTools' });
+      store.setDisabledTools(s.id, clean);
     }
-    let projectPath: string;
-    try {
-      projectPath = resolveProjectPath(projectsRoots, project);
-    } catch (err) {
-      return reply.code(400).send({ error: err instanceof Error ? err.message : 'invalid project' });
-    }
-    return store.create({ projectPath, title: req.body?.title, model: req.body?.model });
+    return store.get(s.id);
   });
 
   // tasks
@@ -134,17 +176,18 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     if (!s || s.kind !== 'task') return reply.code(404).send({ error: 'not found' });
     return { ...s, events: store.eventsSince(req.params.id, 0) };
   });
-  app.post<{ Body: { project?: string; prompt?: string; model?: string } }>('/api/tasks', async (req, reply) => {
-    const { project, prompt, model } = req.body ?? {};
+  app.post<{ Body: { project?: string; prompt?: string; model?: string; effort?: string } }>('/api/tasks', async (req, reply) => {
+    const { project, prompt, model, effort } = req.body ?? {};
     if (!project || !prompt) return reply.code(400).send({ error: 'project and prompt required' });
     if (model !== undefined && !isValidModel(model)) return reply.code(400).send({ error: 'invalid model' });
+    if (effort !== undefined && !isValidEffort(effort)) return reply.code(400).send({ error: 'invalid effort' });
     let projectPath: string;
     try {
       projectPath = resolveProjectPath(projectsRoots, project);
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
     }
-    const id = taskRunner.run({ projectPath, prompt, origin: 'manual', model });
+    const id = taskRunner.run({ projectPath, prompt, origin: 'manual', model, effort });
     return { id };
   });
 

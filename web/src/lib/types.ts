@@ -34,6 +34,15 @@ export type Model = {
   blurb: string;
 };
 
+// Reasoning-effort levels accepted by the Claude Agent SDK (effort option).
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+
+export type Effort = {
+  id: EffortLevel;
+  name: string;
+  blurb: string;
+};
+
 // ---- Backend wire types (mirror server/src/store.ts + routes.ts) ----
 export interface Project {
   name: string;
@@ -50,6 +59,9 @@ export interface Session {
   origin?: string;
   prompt?: string | null;
   model?: string | null;
+  effort?: string | null;
+  /** JSON array string of disabled built-in tool names (disallowedTools). */
+  disabled_tools?: string | null;
   created_at: number;
 }
 

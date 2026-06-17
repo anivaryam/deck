@@ -152,6 +152,81 @@ describe('SessionManager', () => {
     expect(capturedModel).toBe('claude-sonnet-4-6');
   });
 
+  it('passes session effort to queryFn options when set', async () => {
+    const s = store.create({ projectPath: '/p/alpha', effort: 'xhigh' });
+    let capturedEffort: unknown;
+    const effortMgr = new SessionManager(store, cfg, (args) => {
+      capturedEffort = args.options.effort;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-e', uuid: 'e0' };
+        yield { type: 'result', uuid: 'e1', result: 'ok' };
+      })();
+    });
+    await effortMgr.send(s.id, 'hi');
+    expect(capturedEffort).toBe('xhigh');
+  });
+
+  it('omits effort from queryFn options when session effort is null', async () => {
+    const s = store.create({ projectPath: '/p/alpha' }); // no effort
+    let captured: Record<string, unknown> | undefined;
+    const effortMgr = new SessionManager(store, cfg, (args) => {
+      captured = args.options;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-e2', uuid: 'f0' };
+        yield { type: 'result', uuid: 'f1', result: 'ok' };
+      })();
+    });
+    await effortMgr.send(s.id, 'hi');
+    expect(captured && 'effort' in captured).toBe(false);
+  });
+
+  it('passes disallowedTools to queryFn options when the session disables tools', async () => {
+    const s = store.create({ projectPath: '/p/alpha', disabledTools: ['Bash', 'WebFetch'] });
+    let captured: unknown;
+    const mgr2 = new SessionManager(store, cfg, (args) => {
+      captured = args.options.disallowedTools;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-t', uuid: 't0' };
+        yield { type: 'result', uuid: 't1', result: 'ok' };
+      })();
+    });
+    await mgr2.send(s.id, 'hi');
+    expect(captured).toEqual(['Bash', 'WebFetch']);
+  });
+
+  it('omits disallowedTools when the session disables nothing', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let opts: Record<string, unknown> | undefined;
+    const mgr2 = new SessionManager(store, cfg, (args) => {
+      opts = args.options;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-t2', uuid: 'u0' };
+        yield { type: 'result', uuid: 'u1', result: 'ok' };
+      })();
+    });
+    await mgr2.send(s.id, 'hi');
+    expect(opts && 'disallowedTools' in opts).toBe(false);
+  });
+
+  it('tolerates a malformed disabled_tools value (no throw, no gating)', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    // simulate corruption directly through the update path with a non-array via setDisabledTools-bypass:
+    // setDisabledTools always writes valid JSON, so force a bad value by re-creating with a raw write.
+    (store as unknown as { db: { prepare: (q: string) => { run: (...a: unknown[]) => void } } }).db
+      .prepare('UPDATE session SET disabled_tools = ? WHERE id = ?')
+      .run('not json', s.id);
+    let opts: Record<string, unknown> | undefined;
+    const mgr2 = new SessionManager(store, cfg, (args) => {
+      opts = args.options;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-t3', uuid: 'v0' };
+        yield { type: 'result', uuid: 'v1', result: 'ok' };
+      })();
+    });
+    await mgr2.send(s.id, 'hi');
+    expect(opts && 'disallowedTools' in opts).toBe(false);
+  });
+
   it('passes the artifact-delivery system prompt to queryFn', async () => {
     const s = store.create({ projectPath: '/p/alpha' });
     let capturedOptions: Record<string, unknown> | undefined;

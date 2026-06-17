@@ -71,6 +71,7 @@ function TicketsRoute() {
         )
       }
       detail={selected ? <TicketDetail ticket={selected} /> : undefined}
+      onCloseDetail={() => setSelId(null)}
     />
   );
 }

@@ -9,6 +9,7 @@ export function AutomationPage({
   actions,
   list,
   detail,
+  onCloseDetail,
 }: {
   projectName: string;
   projectThreadId?: string;
@@ -16,6 +17,7 @@ export function AutomationPage({
   actions?: ReactNode;
   list: ReactNode;
   detail?: ReactNode;
+  onCloseDetail?: () => void;
 }) {
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -37,9 +39,24 @@ export function AutomationPage({
         </h1>
         {actions}
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto border-r border-border">{list}</div>
-        {detail && <aside className="hidden w-[340px] shrink-0 flex-col overflow-y-auto md:flex">{detail}</aside>}
+        {detail && (
+          // Desktop: side pane. Mobile (<md): full-screen overlay above the list
+          // with a Back affordance — without this the detail was simply hidden.
+          <aside className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background md:static md:inset-auto md:z-auto md:w-[340px] md:shrink-0 md:border-l md:border-border">
+            {onCloseDetail && (
+              <button
+                onClick={onCloseDetail}
+                className="flex items-center gap-1 border-b border-border px-4 py-3 text-left text-xs text-muted-foreground hover:text-foreground md:hidden"
+                aria-label="Back to list"
+              >
+                ← Back
+              </button>
+            )}
+            {detail}
+          </aside>
+        )}
       </div>
     </div>
   );

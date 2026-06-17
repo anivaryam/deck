@@ -41,6 +41,7 @@ function TasksRoute() {
       section="Tasks"
       list={<TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />}
       detail={selId ? <TaskOutput taskId={selId} /> : undefined}
+      onCloseDetail={() => setSelId(null)}
     />
   );
 }

@@ -109,6 +109,9 @@ export class Store {
     listTickets: Database.Statement;
     listTicketsByProject: Database.Statement;
   };
+  // Compiled once, like the prepared statements above — atomic session delete
+  // (events first, then the row).
+  private deleteSessionTxn!: Database.Transaction;
 
   constructor(filename = 'claude-deck.sqlite') {
     this.db = new Database(filename);
@@ -211,6 +214,10 @@ export class Store {
       listTickets: db.prepare(`SELECT * FROM ticket ORDER BY created_at DESC`),
       listTicketsByProject: db.prepare(`SELECT * FROM ticket WHERE project_path = ? ORDER BY created_at DESC`),
     };
+    this.deleteSessionTxn = db.transaction((sid: string) => {
+      this.stmts.deleteEventsForSession.run(sid);
+      this.stmts.deleteSession.run(sid);
+    });
   }
 
   /** Flush WAL and release the file handle. Call on shutdown. */
@@ -319,11 +326,7 @@ export class Store {
 
   /** Delete a session and all of its events atomically. No-op if the id is unknown. */
   deleteSession(id: string): void {
-    const txn = this.db.transaction((sid: string) => {
-      this.stmts.deleteEventsForSession.run(sid);
-      this.stmts.deleteSession.run(sid);
-    });
-    txn(id);
+    this.deleteSessionTxn(id);
   }
 
   recordCronRun(id: string, sessionId: string): void {

@@ -46,3 +46,65 @@ describe('buildDeckMcp tool scoping', () => {
     expect(deckToolNames('ticket-1')).toContain('link_pr');
   });
 });
+
+import { EventEmitter } from 'node:events';
+import { registerTicketAutomation } from '../src/ticketAutomation.ts';
+
+function wire(store: Store) {
+  const mgr = new EventEmitter();
+  registerTicketAutomation(mgr as any, store);
+  return mgr;
+}
+
+describe('ticketAutomation transitions', () => {
+  it('start frame → running', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    mgr.emit('task', { id: 'r1', source_kind: 'ticket', source_id: tk.id, status: 'active', result: null });
+    expect(s.getTicket(tk.id)!.status).toBe('running');
+  });
+
+  it('success with pr_url → review', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    s.updateTicket(tk.id, { pr_url: 'https://github.com/o/r/pull/1' });
+    mgr.emit('task', { id: 'r1', source_kind: 'ticket', source_id: tk.id, status: 'idle', result: 'success' });
+    expect(s.getTicket(tk.id)!.status).toBe('review');
+  });
+
+  it('success without pr_url → done', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    mgr.emit('task', { id: 'r1', source_kind: 'ticket', source_id: tk.id, status: 'idle', result: 'success' });
+    expect(s.getTicket(tk.id)!.status).toBe('done');
+  });
+
+  it('error → failed; cancelled → open', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const a = s.createTicket({ title: 'a', projectPath: '/p' });
+    const b = s.createTicket({ title: 'b', projectPath: '/p' });
+    mgr.emit('task', { id: 'r1', source_kind: 'ticket', source_id: a.id, status: 'errored', result: 'error' });
+    mgr.emit('task', { id: 'r2', source_kind: 'ticket', source_id: b.id, status: 'idle', result: 'cancelled' });
+    expect(s.getTicket(a.id)!.status).toBe('failed');
+    expect(s.getTicket(b.id)!.status).toBe('open');
+  });
+
+  it('ignores non-ticket frames and merged/closed tickets', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    s.updateTicket(tk.id, { status: 'merged' });
+    mgr.emit('task', { id: 'r1', source_kind: 'ticket', source_id: tk.id, status: 'idle', result: 'success' });
+    expect(s.getTicket(tk.id)!.status).toBe('merged'); // not overwritten
+    mgr.emit('task', { id: 'r2', source_kind: 'cron', source_id: 'c1', status: 'idle', result: 'success' }); // no throw
+  });
+
+  it('fallback: scans events for a PR URL when link_pr was not called', () => {
+    const s = new Store(':memory:'); const mgr = wire(s);
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    const run = s.createTask({ projectPath: '/p', prompt: 'go', origin: 'ticket', sourceKind: 'ticket', sourceId: tk.id });
+    s.appendEvent(run.id, { sdkUuid: null, type: 'assistant', payload: { text: 'opened https://github.com/o/r/pull/99 done' } });
+    mgr.emit('task', { id: run.id, source_kind: 'ticket', source_id: tk.id, status: 'idle', result: 'success' });
+    expect(s.getTicket(tk.id)!.pr_url).toBe('https://github.com/o/r/pull/99');
+    expect(s.getTicket(tk.id)!.status).toBe('review'); // fallback ran before the review/done decision
+  });
+});

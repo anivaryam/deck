@@ -6,7 +6,7 @@ import type { Session } from "@/lib/types";
 
 function runStatus(s: Session) {
   if (s.result === "error" || s.result === "queue_full") return "failed" as const;
-  if (s.result === "cancelled") return "done" as const;
+  if (s.result === "cancelled") return "open" as const;
   if (s.result === "success") return "done" as const;
   return taskStatus(s); // still running / legacy
 }

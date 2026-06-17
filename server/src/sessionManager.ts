@@ -167,19 +167,25 @@ export class SessionManager extends EventEmitter {
         this.record(sessionId, String(msg?.type ?? 'unknown'), msg);
       }
       this.store.setStatus(sessionId, 'idle');
-      this.store.finishRun(sessionId, 'success');
-      this.emitTask(sess, 'idle', 'success');
+      if (sess.kind === 'task') {
+        this.store.finishRun(sessionId, 'success');
+        this.emitTask(sess, 'idle', 'success');
+      }
     } catch (err) {
       if (ac.signal.aborted) {
         this.record(sessionId, 'cancelled', { message: 'cancelled by user' });
         this.store.setStatus(sessionId, 'idle');
-        this.store.finishRun(sessionId, 'cancelled');
-        this.emitTask(sess, 'idle', 'cancelled');
+        if (sess.kind === 'task') {
+          this.store.finishRun(sessionId, 'cancelled');
+          this.emitTask(sess, 'idle', 'cancelled');
+        }
       } else {
         this.record(sessionId, 'error', { message: err instanceof Error ? err.message : String(err) });
         this.store.setStatus(sessionId, 'errored');
-        this.store.finishRun(sessionId, 'error');
-        this.emitTask(sess, 'errored', 'error');
+        if (sess.kind === 'task') {
+          this.store.finishRun(sessionId, 'error');
+          this.emitTask(sess, 'errored', 'error');
+        }
         throw err;
       }
     } finally {

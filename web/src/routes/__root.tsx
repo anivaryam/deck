@@ -60,10 +60,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function TaskEventWatcher() {
   const qc = useQueryClient();
   useTaskEvents((frame) => {
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["tickets"] });
-    qc.invalidateQueries({ queryKey: ["cron"] });
-    qc.invalidateQueries({ queryKey: ["runs"] });
+    qc.invalidateQueries({ queryKey: ["tasks"], type: "active" });
+    qc.invalidateQueries({ queryKey: ["tickets"], type: "active" });
+    qc.invalidateQueries({ queryKey: ["cron"], type: "active" });
+    qc.invalidateQueries({ queryKey: ["runs"], type: "active" });
     const t = toastForTask(frame);
     if (t) (t.intent === "error" ? toast.error : toast.success)(t.message);
   });

@@ -14,6 +14,7 @@ import { Scheduler } from './scheduler.ts';
 import { registerRoutes } from './routes.ts';
 import { registerWs } from './wsHub.ts';
 import { AuthSessions } from './auth.ts';
+import { registerTicketAutomation } from './ticketAutomation.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,7 @@ async function main() {
   const config = loadConfig(); // throws + exits non-zero if misconfigured
   const store = new Store(process.env.DECK_DB || 'claude-deck.sqlite');
   const manager = new SessionManager(store, config);
+  registerTicketAutomation(manager, store);
   const taskRunner = new TaskRunner(store, manager);
   const scheduler = new Scheduler(store, taskRunner);
   const auth = new AuthSessions();

@@ -38,3 +38,7 @@ export function isImagePath(p: string): boolean {
 export function isPdfPath(p: string): boolean {
   return /\.pdf$/i.test(p.split('?')[0]);
 }
+
+export function isExternalHref(href: string): boolean {
+  return /^(https?:|data:|mailto:)/i.test(href);
+}

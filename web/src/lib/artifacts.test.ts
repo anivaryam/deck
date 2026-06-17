@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArtifacts, resolveSrc, isImagePath, isPdfPath } from './artifacts';
+import { parseArtifacts, resolveSrc, isImagePath, isPdfPath, isExternalHref } from './artifacts';
 
 describe('parseArtifacts', () => {
   it('returns a single text segment for plain prose', () => {
@@ -59,5 +59,19 @@ describe('type predicates', () => {
   it('detects pdf', () => {
     expect(isPdfPath('a.PDF')).toBe(true);
     expect(isPdfPath('a.png')).toBe(false);
+  });
+});
+
+describe('isExternalHref', () => {
+  it('treats http(s)/data/mailto as external', () => {
+    expect(isExternalHref('https://example.com')).toBe(true);
+    expect(isExternalHref('http://example.com')).toBe(true);
+    expect(isExternalHref('data:image/png;base64,AAAA')).toBe(true);
+    expect(isExternalHref('mailto:a@b.com')).toBe(true);
+  });
+  it('treats project-relative paths as internal', () => {
+    expect(isExternalHref('.deck-artifacts/report.pdf')).toBe(false);
+    expect(isExternalHref('./x.zip')).toBe(false);
+    expect(isExternalHref('docs/readme.md')).toBe(false);
   });
 });

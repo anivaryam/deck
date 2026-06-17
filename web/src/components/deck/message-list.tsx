@@ -2,7 +2,7 @@ import { ChevronRight, ExternalLink, FileText, Loader2, Paperclip } from "lucide
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, ToolCall } from "@/lib/types";
-import { parseArtifacts, isPdfPath, resolveSrc } from "@/lib/artifacts";
+import { parseArtifacts, isPdfPath, isExternalHref, resolveSrc } from "@/lib/artifacts";
 
 const ROLE_PREFIX: Record<string, { text: string; cls: string }> = {
   user: { text: "you@deck:~$", cls: "text-[color:var(--prompt-user)]" },
@@ -158,6 +158,20 @@ function ArtifactContent({
                 loading="lazy"
                 className="max-h-80 rounded-md border border-border"
               />
+            </a>
+          );
+        }
+        // External links (http/data/mailto) are ordinary hyperlinks, not artifacts.
+        if (isExternalHref(s.href)) {
+          return (
+            <a
+              key={i}
+              href={s.href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              {s.label || s.href}
             </a>
           );
         }

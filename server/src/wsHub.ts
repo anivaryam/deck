@@ -19,7 +19,7 @@ interface WsDeps {
 // is safe: the client re-syncs the gap on reconnect via `?since`.
 const MAX_BUFFERED = 8 * 1024 * 1024; // 8MB
 
-export function registerWs(app: FastifyInstance, deps: WsDeps): void {
+export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (sessionId: string) => void } {
   const { store, manager, config, auth } = deps;
   // sessionId -> set of sockets attached to it
   const rooms = new Map<string, Set<WebSocket>>();
@@ -120,4 +120,22 @@ export function registerWs(app: FastifyInstance, deps: WsDeps): void {
       if (room && room.size === 0) rooms.delete(sessionId);
     });
   });
+
+  // Tell every viewer of a now-deleted session, then drop the room. Called by the
+  // DELETE /api/sessions/:id route after the row is removed from the DB.
+  function closeRoom(sessionId: string): void {
+    const room = rooms.get(sessionId);
+    if (!room) return;
+    for (const s of room) {
+      send(s, { type: 'deleted', payload: { message: 'session deleted' } });
+      try {
+        s.close();
+      } catch {
+        /* socket already closing */
+      }
+    }
+    rooms.delete(sessionId);
+  }
+
+  return { closeRoom };
 }

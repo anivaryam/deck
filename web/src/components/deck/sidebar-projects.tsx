@@ -333,8 +333,11 @@ function DeleteSessionButton({
         <button
           aria-label="Delete session"
           onClick={(e) => {
-            // Don't let the click bubble to the row's <Link> (would navigate).
-            e.preventDefault();
+            // Only stop propagation — the button is a DOM sibling of the row's
+            // <Link>, so it can't trigger navigation. Do NOT call preventDefault:
+            // Radix's composeEventHandlers skips the trigger's open-toggle when the
+            // child handler marks the event defaultPrevented, so the popover would
+            // never open.
             e.stopPropagation();
           }}
           className={cn(

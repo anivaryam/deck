@@ -35,8 +35,8 @@ async function main() {
   await app.register(cookie);
   await app.register(websocket);
 
-  registerRoutes(app, { store, config, taskRunner, scheduler, auth });
-  registerWs(app, { store, manager, config, auth });
+  const ws = registerWs(app, { store, manager, config, auth });
+  registerRoutes(app, { store, config, taskRunner, scheduler, auth, manager, closeRoom: ws.closeRoom });
 
   // Serve the built SPA if present (production single-port mode)
   const webDist = path.resolve(__dirname, '../../web/dist');

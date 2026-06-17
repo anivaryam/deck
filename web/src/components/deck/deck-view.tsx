@@ -16,7 +16,7 @@ import { MODELS } from "@/lib/static-data";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { ImageAttachment, Model } from "@/lib/types";
+import type { ImageAttachment, Model, Session } from "@/lib/types";
 
 // A cold-start prompt (sent from "/") creates a session then navigates to
 // "/$threadId", which remounts this component. The queued prompt is stashed at
@@ -159,6 +159,22 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
     await createAndOpen(projectName);
   }
 
+  async function handleDeleteSession(session: Session) {
+    try {
+      await api.deleteSession(session.id);
+    } catch (err) {
+      if ((err as { status?: number })?.status === 401) {
+        navigate({ to: "/login" });
+        return;
+      }
+      toast.error(`Couldn't delete session: ${err instanceof Error ? err.message : "unknown error"}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["sessions"] });
+    if (session.id === activeThreadId) navigate({ to: "/" });
+    toast.success("Session deleted");
+  }
+
   async function handleCreateProject(name: string) {
     setSidebarOpen(false);
     try {
@@ -195,6 +211,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       activeProjectPath={activeProjectPath}
       onNewChat={handleNewChat}
       onCreateProject={handleCreateProject}
+      onDeleteSession={handleDeleteSession}
       onNavigate={() => setSidebarOpen(false)}
       reserveCloseButton={inSheet}
     />

@@ -48,6 +48,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const { store, config, taskRunner, scheduler } = deps;
   const auth = deps.auth ?? new AuthSessions();
   const loginLimiter = new RateLimiter(8, 60_000);
+  // Every root to scan/resolve, in priority order. loadConfig populates
+  // projectsRoots; partial test fixtures fall back to the single projectsRoot.
+  const projectsRoots = config.projectsRoots ?? [config.projectsRoot];
 
   app.post<{ Body: { token?: string } }>('/auth', async (req, reply) => {
     const ip = req.ip || 'unknown';
@@ -89,7 +92,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     }
   });
 
-  app.get('/api/projects', async () => listProjects(config.projectsRoot));
+  app.get('/api/projects', async () => listProjects(projectsRoots));
 
   app.post<{ Body: { name?: string } }>('/api/projects', async (req, reply) => {
     const name = req.body?.name;
@@ -117,7 +120,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     }
     let projectPath: string;
     try {
-      projectPath = resolveProjectPath(config.projectsRoot, project);
+      projectPath = resolveProjectPath(projectsRoots, project);
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'invalid project' });
     }
@@ -137,7 +140,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     if (model !== undefined && !isValidModel(model)) return reply.code(400).send({ error: 'invalid model' });
     let projectPath: string;
     try {
-      projectPath = resolveProjectPath(config.projectsRoot, project);
+      projectPath = resolveProjectPath(projectsRoots, project);
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
     }
@@ -153,7 +156,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     if (!Scheduler.isValid(schedule)) return reply.code(400).send({ error: 'invalid cron expression' });
     let projectPath: string;
     try {
-      projectPath = resolveProjectPath(config.projectsRoot, project);
+      projectPath = resolveProjectPath(projectsRoots, project);
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
     }
@@ -180,7 +183,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     if (!title || !project) return reply.code(400).send({ error: 'title and project required' });
     let projectPath: string;
     try {
-      projectPath = resolveProjectPath(config.projectsRoot, project);
+      projectPath = resolveProjectPath(projectsRoots, project);
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
     }

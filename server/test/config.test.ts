@@ -37,4 +37,23 @@ describe('loadConfig', () => {
     const cfg = loadConfig(env, { credentialsExist: true });
     expect(cfg.token).toBe(base.DECK_TOKEN);
   });
+
+  it('defaults projectsRoots to the single PROJECTS_ROOT', () => {
+    const cfg = loadConfig(base);
+    expect(cfg.projectsRoots).toEqual(['/tmp/projects']);
+    expect(cfg.projectsRoot).toBe('/tmp/projects');
+  });
+
+  it('parses PROJECTS_ROOTS into an ordered, deduped list (first is the default root)', () => {
+    const env = { ...base, PROJECTS_ROOTS: '/tmp/projects:/tmp/tools:/tmp/projects' };
+    const cfg = loadConfig(env);
+    expect(cfg.projectsRoots).toEqual(['/tmp/projects', '/tmp/tools']);
+    expect(cfg.projectsRoot).toBe('/tmp/projects');
+  });
+
+  it('ignores empty segments in PROJECTS_ROOTS', () => {
+    const env = { ...base, PROJECTS_ROOTS: '/tmp/projects::/tmp/tools:' };
+    const cfg = loadConfig(env);
+    expect(cfg.projectsRoots).toEqual(['/tmp/projects', '/tmp/tools']);
+  });
 });

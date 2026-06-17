@@ -28,12 +28,14 @@ processes:
     cmd: env -u ANTHROPIC_API_KEY npm --prefix server start
     env:
       PORT: "8787"
-      # Root that sessions are jailed under; its immediate subdirs are the projects
-      # shown in the sidebar. The server never reads .env — without this it falls back
-      # to process.cwd() (the server package dir) and the sidebar lists
-      # node_modules/src/test instead of your real projects (and every existing chat,
-      # keyed by project_path, gets hidden).
-      PROJECTS_ROOT: "/home/anivaryam/github/repositories/projects"
+      # Roots that sessions are jailed under; immediate subdirs of each are the
+      # projects shown in the sidebar. PROJECTS_ROOTS is a colon-separated list in
+      # priority order — first root wins on a name collision and is where new
+      # projects are created. (Single-root PROJECTS_ROOT is still honored as a
+      # fallback.) The server never reads .env — without this it falls back to
+      # process.cwd() (the server package dir) and the sidebar lists
+      # node_modules/src/test instead of your real projects.
+      PROJECTS_ROOTS: "/home/anivaryam/github/repositories/projects:/home/anivaryam/github/repositories/tools"
       # Public tunnel origin → lets the WebSocket pass the Origin allowlist when
       # the chat is opened from a phone via https://deck.systems.apphorialabs.com.
       # Without this, login + REST work over the tunnel but the chat WS is rejected.

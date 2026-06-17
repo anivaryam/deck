@@ -64,3 +64,46 @@ describe('createProject', () => {
     expect(createProject(root, 'my_proj-2').name).toBe('my_proj-2');
   });
 });
+
+describe('multi-root', () => {
+  let root2: string;
+
+  beforeEach(() => {
+    root2 = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-root2-'));
+    fs.mkdirSync(path.join(root2, 'gamma'));
+    fs.mkdirSync(path.join(root2, 'alpha')); // name collision with root (first root must win)
+  });
+  afterEach(() => {
+    fs.rmSync(root2, { recursive: true, force: true });
+  });
+
+  it('listProjects merges roots, sorts, and first root wins on collision', () => {
+    const projects = listProjects([root, root2]);
+    expect(projects.map((p) => p.name)).toEqual(['alpha', 'beta', 'gamma']);
+    // alpha resolves to the first root, not root2
+    expect(projects.find((p) => p.name === 'alpha')!.path).toBe(path.join(root, 'alpha'));
+  });
+
+  it('listProjects skips an unreadable root without throwing', () => {
+    const missing = path.join(os.tmpdir(), 'deck-does-not-exist-zzz');
+    expect(listProjects([missing, root]).map((p) => p.name).sort()).toEqual(['alpha', 'beta']);
+  });
+
+  it('resolveProjectPath finds a project that only exists in the second root', () => {
+    expect(resolveProjectPath([root, root2], 'gamma')).toBe(path.join(root2, 'gamma'));
+  });
+
+  it('resolveProjectPath prefers the first root on collision', () => {
+    expect(resolveProjectPath([root, root2], 'alpha')).toBe(path.join(root, 'alpha'));
+  });
+
+  it('resolveProjectPath throws when the name is in no root', () => {
+    expect(() => resolveProjectPath([root, root2], 'nope')).toThrow();
+  });
+
+  it('createProject targets the first root', () => {
+    const p = createProject([root, root2], 'delta');
+    expect(p.path).toBe(path.join(root, 'delta'));
+    expect(fs.existsSync(path.join(root2, 'delta'))).toBe(false);
+  });
+});

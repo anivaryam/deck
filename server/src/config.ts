@@ -5,7 +5,12 @@ import os from 'node:os';
 
 export interface Config {
   token: string;
+  /** First (default) projects root — where new projects are created. */
   projectsRoot: string;
+  /** All projects roots to scan/resolve, in priority order. First match wins.
+   *  Optional in the type so partial test fixtures stay valid; loadConfig always
+   *  populates it. Consumers fall back to `[projectsRoot]` when absent. */
+  projectsRoots?: string[];
   port: number;
   model: string;
   publicOrigin?: string;
@@ -47,9 +52,30 @@ export function loadConfig(
     );
   }
 
+  // PROJECTS_ROOTS (plural, path-delimiter-separated) lists every root to scan.
+  // Falls back to the single PROJECTS_ROOT (or cwd) for backward compatibility.
+  const rawRoots = env.PROJECTS_ROOTS
+    ? env.PROJECTS_ROOTS.split(path.delimiter)
+    : [env.PROJECTS_ROOT || process.cwd()];
+  // Resolve to absolute paths and dedup, preserving priority order. Existence is
+  // NOT validated here — listProjects/resolveProjectPath tolerate a missing root
+  // (skip on read), so a briefly-absent root doesn't crash startup.
+  const seen = new Set<string>();
+  const projectsRoots: string[] = [];
+  for (const r of rawRoots) {
+    const trimmed = r.trim();
+    if (!trimmed) continue;
+    const abs = path.resolve(trimmed);
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    projectsRoots.push(abs);
+  }
+  if (projectsRoots.length === 0) projectsRoots.push(path.resolve(process.cwd()));
+
   return {
     token,
-    projectsRoot: path.resolve(env.PROJECTS_ROOT || process.cwd()),
+    projectsRoot: projectsRoots[0],
+    projectsRoots,
     port: Number(env.PORT || 8787),
     model: env.DECK_MODEL || 'claude-opus-4-8',
     publicOrigin: env.DECK_PUBLIC_ORIGIN,

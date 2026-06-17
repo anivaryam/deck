@@ -56,12 +56,27 @@ describe('buildDeckMcp tool scoping', () => {
 
 import { EventEmitter } from 'node:events';
 import { registerTicketAutomation } from '../src/ticketAutomation.ts';
+import { TaskRunner } from '../src/taskRunner.ts';
 
 function wire(store: Store) {
   const mgr = new EventEmitter();
   registerTicketAutomation(mgr as any, store);
   return mgr;
 }
+
+describe('queue-full ticket run', () => {
+  it('transitions the ticket to failed (emits a terminal frame)', () => {
+    const s = new Store(':memory:');
+    const mgr: any = new EventEmitter();
+    mgr.send = () => new Promise<void>(() => {}); // never resolves — holds the slot
+    registerTicketAutomation(mgr, s);
+    const runner = new TaskRunner(s, mgr, 1); // cap = 1
+    const tk = s.createTicket({ title: 't', projectPath: '/p' });
+    runner.run({ projectPath: '/p', prompt: 'fill', origin: 'manual' }); // occupies the only slot
+    runner.run({ projectPath: '/p', prompt: 'overflow', origin: 'ticket', sourceKind: 'ticket', sourceId: tk.id });
+    expect(s.getTicket(tk.id)!.status).toBe('failed');
+  });
+});
 
 describe('ticketAutomation transitions', () => {
   it('start frame → running', () => {

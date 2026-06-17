@@ -32,7 +32,7 @@ export function statusDotClass(s: AutomationStatus): string {
     case "merged":
       return "bg-primary";
     case "closed":
-      return "border border-muted-foreground bg-transparent";
+      return "bg-muted-foreground/40";
   }
 }
 

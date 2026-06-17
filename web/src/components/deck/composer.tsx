@@ -1,5 +1,6 @@
 import { ArrowUp, AtSign, Mic, Paperclip, SlashSquare, Square, X } from "lucide-react";
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -9,6 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { loadDraft, saveDraft, clearDraft } from "@/lib/draft";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,12 +58,42 @@ function readBase64(file: File): Promise<string> {
 }
 
 export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => loadDraft(sessionId));
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [files, setFiles] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Mirror the live value in a ref so the session-switch / unmount effects can
+  // persist it without re-subscribing to every keystroke (which would race the
+  // sessionId change).
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  // Track the session the current draft belongs to. On switch, save the
+  // outgoing draft under its OWN id before loading the incoming one — this
+  // avoids the stale-value overwrite race when sessionId and value change
+  // together.
+  const prevSession = useRef(sessionId);
+  useEffect(() => {
+    if (prevSession.current !== sessionId) {
+      saveDraft(prevSession.current, valueRef.current);
+      prevSession.current = sessionId;
+      setValue(loadDraft(sessionId));
+    }
+  }, [sessionId]);
+
+  // Persist the current draft when the composer unmounts (e.g. navigating to
+  // tickets/tasks/cron) so typed-but-unsent text survives the round trip.
+  useEffect(
+    () => () => {
+      saveDraft(prevSession.current, valueRef.current);
+    },
+    [],
+  );
 
   // Auto-grow with the content: collapse to measure, then snap to scrollHeight.
   // CSS max-height caps it; past the cap the textarea scrolls internally.
@@ -147,6 +179,7 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
     if ((!v && !hasAttachments) || busy || !connected) return;
     const suffix = files.length ? `\n\nAttached files: ${files.join(", ")}` : "";
     onSend(v + suffix, images);
+    clearDraft(sessionId);
     setValue("");
     setImages([]);
     setFiles([]);
@@ -217,7 +250,10 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
           <textarea
             ref={ref}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              saveDraft(sessionId, e.target.value);
+            }}
             onKeyDown={onKey}
             onPaste={onPaste}
             rows={1}

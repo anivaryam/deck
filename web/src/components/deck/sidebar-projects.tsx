@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Clock, FolderGit2, FolderPlus, ListChecks, MessageSquarePlus, Plus, Search, TerminalSquare, Ticket as TicketIcon, Trash2, X } from "lucide-react";
+import { ChevronRight, Clock, FolderGit2, FolderPlus, ListChecks, MessageSquare, MessageSquarePlus, Plus, Search, TerminalSquare, Ticket as TicketIcon, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -59,6 +59,12 @@ export function SidebarProjects({
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
     activeProjectPath ? { [activeProjectPath]: true } : {},
   );
+  // Chats sub-section open state per project. Auto-open the project that contains the active session.
+  const [chatsOpen, setChatsOpen] = useState<Record<string, boolean>>(() => {
+    if (!activeId) return {};
+    const activeSession = sessions.find((s) => s.id === activeId);
+    return activeSession ? { [activeSession.project_path]: true } : {};
+  });
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -261,7 +267,19 @@ export function SidebarProjects({
                   >
                     <Clock className="size-3.5" /> Cron
                   </Link>
+                  <button
+                    onClick={() => setChatsOpen((s) => ({ ...s, [p.path]: !(s[p.path] ?? false) }))}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                  >
+                    <MessageSquare className="size-3.5 shrink-0" />
+                    <span className="flex-1 text-left">Chats</span>
+                    <span className="text-[10px] opacity-50">{threads.length}</span>
+                    <ChevronRight
+                      className={cn("size-3 shrink-0 transition-transform", (chatsOpen[p.path] ?? false) && "rotate-90")}
+                    />
+                  </button>
                 </div>
+                {(chatsOpen[p.path] ?? false) && (
                 <ul className="mt-1 space-y-0.5">
                   {threads.map((t) => {
                     const active = t.id === activeId;
@@ -305,6 +323,7 @@ export function SidebarProjects({
                     </li>
                   )}
                 </ul>
+                )}
                 </>
               )}
             </div>

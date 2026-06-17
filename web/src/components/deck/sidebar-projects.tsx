@@ -278,9 +278,8 @@ export function SidebarProjects({
                       className={cn("size-3 shrink-0 transition-transform", (chatsOpen[p.path] ?? false) && "rotate-90")}
                     />
                   </button>
-                </div>
-                {(chatsOpen[p.path] ?? false) && (
-                <ul className="mt-1 space-y-0.5">
+                  {(chatsOpen[p.path] ?? false) && (
+                  <ul className="space-y-0.5 pt-1">
                   {threads.map((t) => {
                     const active = t.id === activeId;
                     return (
@@ -322,8 +321,9 @@ export function SidebarProjects({
                       </button>
                     </li>
                   )}
-                </ul>
-                )}
+                  </ul>
+                  )}
+                </div>
                 </>
               )}
             </div>

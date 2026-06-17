@@ -5,6 +5,25 @@ import type { Config } from './config.ts';
 import type { Store } from './store.ts';
 import { buildDeckMcp } from './deckTools.ts';
 
+/**
+ * Injected into every session's system prompt so Claude knows how to deliver
+ * visual artifacts to the user through the deck chat UI — independent of whether
+ * the target project has a CLAUDE.md describing the convention.
+ */
+const ARTIFACT_SYSTEM_PROMPT = `You are running inside "deck", a chat interface the user reads in a web/mobile browser. Deck renders markdown image and link tokens in your replies and serves project files over GET /api/file/:sessionId/* (read-only, jailed to the project directory).
+
+To SHOW the user a visual result — a screenshot, generated image, chart, or rendered PDF — write the file into the current project (prefer a .deck-artifacts/ directory) and then reference it with markdown:
+- Image (renders inline, click = full size): ![caption](.deck-artifacts/name.png) — supported inline: png, jpg, jpeg, webp, gif.
+- PDF (download chip + inline preview toggle): [report.pdf](.deck-artifacts/report.pdf)
+- Any other file (download chip): [bundle.zip](.deck-artifacts/bundle.zip)
+
+Rules:
+- No spaces or parentheses in artifact filenames — the renderer stops a path at the first whitespace or paren. Use hyphens or underscores (my-shot.png).
+- Only project-relative paths are served; paths outside the project are refused. http(s)/mailto links render as ordinary links, not downloads.
+- Markdown image syntax (![](...)) renders inline; a plain link to an image renders as a download chip.
+- Served files cap at 50MB; svg/html are served as downloads, never inlined.
+Prefer actually showing artifacts this way over only describing them.`;
+
 /** Derive a short session title from the first prompt: one line, ~60 chars. */
 function deriveTitle(text: string): string {
   const oneLine = (text ?? '').replace(/\s+/g, ' ').trim();
@@ -96,6 +115,7 @@ export class SessionManager extends EventEmitter {
       const options: Record<string, unknown> = {
         cwd: sess.project_path,
         model: sess.model || this.cfg.model,
+        systemPrompt: ARTIFACT_SYSTEM_PROMPT,
         permissionMode: mode,
         abortController: ac,
         mcpServers: { deck: buildDeckMcp(this.store, sess.project_path) },

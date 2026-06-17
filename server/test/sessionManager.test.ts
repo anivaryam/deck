@@ -152,6 +152,24 @@ describe('SessionManager', () => {
     expect(capturedModel).toBe('claude-sonnet-4-6');
   });
 
+  it('passes the artifact-delivery system prompt to queryFn', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let capturedOptions: Record<string, unknown> | undefined;
+    const promptMgr = new SessionManager(store, cfg, (args) => {
+      capturedOptions = args.options;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-sp', uuid: 'sp0' };
+        yield { type: 'result', uuid: 'sp1', result: 'ok' };
+      })();
+    });
+    await promptMgr.send(s.id, 'hi');
+    const sp = capturedOptions?.systemPrompt as string;
+    expect(typeof sp).toBe('string');
+    expect(sp).toContain('.deck-artifacts');
+    expect(sp).toContain('/api/file/');
+    expect(sp).toContain('![');
+  });
+
   it('falls back to cfg.model when session model is null', async () => {
     const s = store.create({ projectPath: '/p/alpha' }); // no model
     let capturedModel: unknown;

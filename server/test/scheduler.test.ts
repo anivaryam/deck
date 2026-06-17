@@ -19,7 +19,7 @@ describe('Scheduler', () => {
     const b = store.createCron({ schedule: '* * * * *', projectPath: '/p/b', prompt: 'B' });
     store.setCronEnabled(b.id, false);
     sched.fireCron(a.id);                       // simulate a tick for cron a
-    expect(runs).toEqual([{ projectPath: '/p/a', prompt: 'A', origin: 'cron' }]);
+    expect(runs).toMatchObject([{ projectPath: '/p/a', prompt: 'A', origin: 'cron', sourceKind: 'cron', sourceId: a.id }]);
     expect(store.getCron(a.id)!.last_session_id).toBe('sess-1');
     sched.fireCron(b.id);                        // disabled → no run
     expect(runs.length).toBe(1);

@@ -260,7 +260,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const tk = store.getTicket(req.params.id);
     if (!tk) return reply.code(404).send({ error: 'not found' });
     const prompt = `Work on this ticket.\n\nTitle: ${tk.title}\n\n${tk.body ?? ''}`.trim();
-    const sessionId = taskRunner.run({ projectPath: tk.project_path, prompt, origin: 'ticket', title: tk.title });
+    const sessionId = taskRunner.run({ projectPath: tk.project_path, prompt, origin: 'ticket', title: tk.title, sourceKind: 'ticket', sourceId: tk.id });
     store.updateTicket(tk.id, { status: 'running', session_id: sessionId });
     return { session_id: sessionId };
   });

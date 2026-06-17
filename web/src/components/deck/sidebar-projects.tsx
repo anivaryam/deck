@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, FolderGit2, FolderPlus, MessageSquarePlus, Plus, Search, TerminalSquare, Trash2, X } from "lucide-react";
+import { ChevronRight, Clock, FolderGit2, FolderPlus, ListChecks, MessageSquarePlus, Plus, Search, TerminalSquare, Ticket as TicketIcon, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -235,6 +235,33 @@ export function SidebarProjects({
               </button>
 
               {isOpen && (
+                <>
+                <div className="ml-4 border-l border-sidebar-border pl-2">
+                  <Link
+                    to="/tickets"
+                    search={{ project: p.path }}
+                    onClick={onNavigate}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground [&.active]:bg-sidebar-accent [&.active]:text-primary"
+                  >
+                    <TicketIcon className="size-3.5" /> Tickets
+                  </Link>
+                  <Link
+                    to="/tasks"
+                    search={{ project: p.path }}
+                    onClick={onNavigate}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground [&.active]:bg-sidebar-accent [&.active]:text-primary"
+                  >
+                    <ListChecks className="size-3.5" /> Tasks
+                  </Link>
+                  <Link
+                    to="/cron"
+                    search={{ project: p.path }}
+                    onClick={onNavigate}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground [&.active]:bg-sidebar-accent [&.active]:text-primary"
+                  >
+                    <Clock className="size-3.5" /> Cron
+                  </Link>
+                </div>
                 <ul className="mt-1 space-y-0.5">
                   {threads.map((t) => {
                     const active = t.id === activeId;
@@ -278,6 +305,7 @@ export function SidebarProjects({
                     </li>
                   )}
                 </ul>
+                </>
               )}
             </div>
           );

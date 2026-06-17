@@ -11,3 +11,5 @@ dist/
 .deck-uploads/
 # Local Claude project instructions — runtime-loaded by the SDK, never committed.
 /CLAUDE.md
+
+.superpowers/

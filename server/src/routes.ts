@@ -7,6 +7,7 @@ import { listProjects, resolveProjectPath, createProject } from './projectScanne
 import type { Store } from './store.ts';
 import type { Config } from './config.ts';
 import type { TaskRunner } from './taskRunner.ts';
+import type { SessionManager } from './sessionManager.ts';
 import { Scheduler } from './scheduler.ts';
 
 export interface RouteDeps {
@@ -16,6 +17,10 @@ export interface RouteDeps {
   scheduler: Scheduler;
   /** Shared with the WS hub. Created per-app if omitted (tests). */
   auth?: AuthSessions;
+  /** Optional: present in production wiring; omitted by some tests. */
+  manager?: SessionManager;
+  /** Optional: close + drop the WS room for a session (from the WS hub). */
+  closeRoom?: (id: string) => void;
 }
 
 /** Cookie carries an opaque session id; valid only if the registry knows it. */
@@ -62,7 +67,7 @@ const INLINE_CT = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp',
 const MAX_SERVE = 50 * 1024 * 1024;
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const { store, config, taskRunner, scheduler } = deps;
+  const { store, config, taskRunner, scheduler, manager, closeRoom } = deps;
   const auth = deps.auth ?? new AuthSessions();
   const loginLimiter = new RateLimiter(8, 60_000);
   // Every root to scan/resolve, in priority order. loadConfig populates
@@ -167,6 +172,17 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       store.setDisabledTools(s.id, clean);
     }
     return store.get(s.id);
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/sessions/:id', async (req, reply) => {
+    const id = req.params.id;
+    if (!store.get(id)) return reply.code(404).send({ error: 'not found' });
+    // Cancel an in-flight turn first; discard() also suppresses its trailing event
+    // writes so they can't resurrect rows we're about to delete.
+    if (manager?.isActive(id)) manager.discard(id);
+    store.deleteSession(id);
+    closeRoom?.(id); // tell live viewers, drop the room
+    return reply.code(204).send();
   });
 
   // tasks

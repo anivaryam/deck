@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, FolderGit2, FolderPlus, MessageSquarePlus, Plus, Search, TerminalSquare, X } from "lucide-react";
+import { ChevronRight, FolderGit2, FolderPlus, MessageSquarePlus, Plus, Search, TerminalSquare, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -38,6 +38,7 @@ type Props = {
   onNavigate?: () => void;
   onNewChat: (projectName: string) => void;
   onCreateProject: (name: string) => void;
+  onDeleteSession: (session: Session) => void | Promise<void>;
   // When rendered inside the mobile sheet, reserve room for the sheet's own
   // close (X) button so it doesn't overlap the header's action icons.
   reserveCloseButton?: boolean;
@@ -51,6 +52,7 @@ export function SidebarProjects({
   onNavigate,
   onNewChat,
   onCreateProject,
+  onDeleteSession,
   reserveCloseButton,
 }: Props) {
   // Only the active (or last-open) project starts expanded; the rest collapse.
@@ -237,13 +239,13 @@ export function SidebarProjects({
                   {threads.map((t) => {
                     const active = t.id === activeId;
                     return (
-                      <li key={t.id}>
+                      <li key={t.id} className="group/row relative">
                         <Link
                           to="/$threadId"
                           params={{ threadId: t.id }}
                           onClick={onNavigate}
                           className={cn(
-                            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors",
+                            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 pr-8 text-sm transition-colors",
                             active
                               ? "bg-sidebar-accent text-primary"
                               : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
@@ -260,6 +262,7 @@ export function SidebarProjects({
                             {relTime(t.created_at)}
                           </span>
                         </Link>
+                        <DeleteSessionButton session={t} onDelete={onDeleteSession} />
                       </li>
                     );
                   })}
@@ -313,5 +316,69 @@ function IconBtn({ label, children, onClick }: { label: string; children: React.
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+function DeleteSessionButton({
+  session,
+  onDelete,
+}: {
+  session: Session;
+  onDelete: (session: Session) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          aria-label="Delete session"
+          onClick={(e) => {
+            // Only stop propagation — the button is a DOM sibling of the row's
+            // <Link>, so it can't trigger navigation. Do NOT call preventDefault:
+            // Radix's composeEventHandlers skips the trigger's open-toggle when the
+            // child handler marks the event defaultPrevented, so the popover would
+            // never open.
+            e.stopPropagation();
+          }}
+          className={cn(
+            "absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-muted-foreground/60",
+            "opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-destructive",
+            "group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
+          )}
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" portal={false} className="w-48 p-2 font-mono">
+        <p className="mb-2 px-1 text-xs text-foreground">Delete this session?</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+              void onDelete(session);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

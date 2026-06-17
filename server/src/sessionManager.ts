@@ -51,6 +51,7 @@ export type QueryFn = (args: { prompt: string | AsyncIterable<any>; options: Rec
 export class SessionManager extends EventEmitter {
   private active = new Set<string>();
   private controllers = new Map<string, AbortController>();
+  private deleting = new Set<string>();
 
   constructor(
     private store: Store,
@@ -69,6 +70,15 @@ export class SessionManager extends EventEmitter {
     if (!ac) return false;
     ac.abort();
     return true;
+  }
+
+  /** Abort an in-flight turn (if any) and suppress its trailing event writes so a
+   *  caller can safely delete the session immediately afterward. */
+  discard(id: string): void {
+    this.deleting.add(id);
+    // Only a running turn's `finally` clears `deleting`. With nothing in flight,
+    // clear it now so an idle discard can't permanently mute a (re)used id.
+    if (!this.cancel(id)) this.deleting.delete(id);
   }
 
   async send(sessionId: string, promptText: string, images?: Array<{ media_type: string; data: string }>): Promise<void> {
@@ -157,10 +167,12 @@ export class SessionManager extends EventEmitter {
     } finally {
       this.controllers.delete(sessionId);
       this.active.delete(sessionId);
+      this.deleting.delete(sessionId);
     }
   }
 
   private record(sessionId: string, type: string, payload: any): void {
+    if (this.deleting.has(sessionId)) return;
     const sdkUuid = typeof payload?.uuid === 'string' ? payload.uuid : null;
     const row = this.store.appendEvent(sessionId, { sdkUuid, type, payload });
     const ev: DeckEvent = { sessionId, type, payload, seq: row.seq };

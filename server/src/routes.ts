@@ -268,7 +268,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   app.post<{ Params: { id: string } }>('/api/tickets/:id/run', async (req, reply) => {
     const tk = store.getTicket(req.params.id);
     if (!tk) return reply.code(404).send({ error: 'not found' });
-    const prompt = `Work on this ticket.\n\nTitle: ${tk.title}\n\n${tk.body ?? ''}`.trim();
+    const prompt = `Work on this ticket.\n\nTitle: ${tk.title}\n\n${tk.body ?? ''}\n\nWork on a new git branch. When the change is complete, open a Pull Request with the \`gh\` CLI and then call the \`link_pr\` tool with the PR URL. If you cannot complete it, stop and explain why.`.trim();
     const sessionId = taskRunner.run({ projectPath: tk.project_path, prompt, origin: 'ticket', title: tk.title, sourceKind: 'ticket', sourceId: tk.id });
     store.updateTicket(tk.id, { status: 'running', session_id: sessionId });
     return { session_id: sessionId };

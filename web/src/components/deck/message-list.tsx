@@ -114,7 +114,7 @@ function PdfBlock({ url, label }: { url: string; label: string }) {
         </button>
       </span>
       {open && (
-        <iframe src={url} title={label} className="mt-1 h-96 w-full rounded-md border border-border bg-white" />
+        <iframe src={url} title={label} sandbox="" className="mt-1 h-96 w-full rounded-md border border-border bg-white" />
       )}
     </span>
   );
@@ -147,11 +147,12 @@ function ArtifactContent({
   return (
     <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
       {segments.map((s, i) => {
-        if (s.kind === "text") return <span key={i}>{s.value}</span>;
+        const key = s.kind === "text" ? `t${i}` : `${s.kind}:${s.kind === "image" ? s.src : s.href}`;
+        if (s.kind === "text") return <span key={key}>{s.value}</span>;
         if (s.kind === "image") {
           const url = resolveSrc(s.src, sessionId);
           return (
-            <a key={i} href={url} target="_blank" rel="noreferrer" className="my-1.5 block w-fit">
+            <a key={key} href={url} target="_blank" rel="noreferrer" className="my-1.5 block w-fit">
               <img
                 src={url}
                 alt={s.alt}
@@ -165,7 +166,7 @@ function ArtifactContent({
         if (isExternalHref(s.href)) {
           return (
             <a
-              key={i}
+              key={key}
               href={s.href}
               target="_blank"
               rel="noreferrer"
@@ -177,11 +178,11 @@ function ArtifactContent({
         }
         const url = resolveSrc(s.href, sessionId);
         if (isPdfPath(s.href)) {
-          return <PdfBlock key={i} url={url} label={s.label || "document.pdf"} />;
+          return <PdfBlock key={key} url={url} label={s.label || "document.pdf"} />;
         }
         return (
           <a
-            key={i}
+            key={key}
             href={url}
             download
             className="inline-flex items-center gap-1.5 rounded border border-border bg-background/40 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"

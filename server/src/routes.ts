@@ -207,6 +207,15 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     return { id };
   });
 
+  // runs
+  app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {
+    const { source_kind, source_id } = req.query ?? {};
+    if ((source_kind !== 'cron' && source_kind !== 'ticket') || !source_id) {
+      return reply.code(400).send({ error: 'source_kind (cron|ticket) and source_id required' });
+    }
+    return store.listRunsForSource(source_kind, source_id);
+  });
+
   // cron
   app.get('/api/cron', async () => store.listCron());
   app.post<{ Body: { schedule?: string; project?: string; prompt?: string } }>('/api/cron', async (req, reply) => {

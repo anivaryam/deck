@@ -1,7 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
 import { Store } from '../src/store.ts';
 import { TaskRunner } from '../src/taskRunner.ts';
 import { Scheduler } from '../src/scheduler.ts';
+import { registerRoutes } from '../src/routes.ts';
 import { EventEmitter } from 'node:events';
 
 let store: Store;
@@ -84,5 +90,100 @@ describe('events channel contract', () => {
     mgr.on('task', (f) => received.push(f));
     mgr.emit('task', { id: 's1', source_kind: 'cron', source_id: 'c1', status: 'idle', result: 'success' });
     expect(received).toEqual([{ id: 's1', source_kind: 'cron', source_id: 'c1', status: 'idle', result: 'success' }]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// GET /api/runs route
+// ────────────────────────────────────────────────────────────
+describe('GET /api/runs', () => {
+  let root: string;
+  let app: ReturnType<typeof Fastify>;
+  let routeStore: Store;
+
+  const TOKEN = 'runs-test-token-9999';
+
+  beforeEach(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-runs-'));
+    fs.mkdirSync(path.join(root, 'proj'));
+    routeStore = new Store(':memory:');
+    const fakeManager = { send: async (_id: string, _prompt: string): Promise<void> => {} } as any;
+    const taskRunner = new TaskRunner(routeStore, fakeManager);
+    const scheduler = new Scheduler(routeStore, taskRunner);
+    app = Fastify();
+    await app.register(cookie);
+    registerRoutes(app, {
+      store: routeStore,
+      config: { token: TOKEN, projectsRoot: root, port: 1, model: 'claude-opus-4-8' },
+      taskRunner,
+      scheduler,
+    });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  async function login(): Promise<string> {
+    const res = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    return res.headers['set-cookie'] as string;
+  }
+
+  it('GET /api/runs without auth → 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=cron&source_id=c1' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('GET /api/runs missing source_kind → 400', async () => {
+    const cookieHeader = await login();
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_id=c1', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/source_kind/i);
+  });
+
+  it('GET /api/runs missing source_id → 400', async () => {
+    const cookieHeader = await login();
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=cron', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/source_id/i);
+  });
+
+  it('GET /api/runs invalid source_kind → 400', async () => {
+    const cookieHeader = await login();
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=manual&source_id=x1', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('GET /api/runs with no matching runs returns empty array', async () => {
+    const cookieHeader = await login();
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=cron&source_id=nonexistent', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+
+  it('GET /api/runs returns runs for the given source', async () => {
+    const cookieHeader = await login();
+    routeStore.createTask({ projectPath: root, prompt: 'run 1', origin: 'cron', sourceKind: 'cron', sourceId: 'c42' });
+    routeStore.createTask({ projectPath: root, prompt: 'run 2', origin: 'cron', sourceKind: 'cron', sourceId: 'c42' });
+    routeStore.createTask({ projectPath: root, prompt: 'other', origin: 'cron', sourceKind: 'cron', sourceId: 'OTHER' });
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=cron&source_id=c42', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(200);
+    const runs = res.json();
+    expect(Array.isArray(runs)).toBe(true);
+    expect(runs).toHaveLength(2);
+    expect(runs.every((r: any) => r.source_kind === 'cron' && r.source_id === 'c42')).toBe(true);
+  });
+
+  it('GET /api/runs works for ticket source_kind', async () => {
+    const cookieHeader = await login();
+    routeStore.createTask({ projectPath: root, prompt: 'ticket run', origin: 'ticket', sourceKind: 'ticket', sourceId: 't7' });
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=ticket&source_id=t7', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(200);
+    const runs = res.json();
+    expect(runs).toHaveLength(1);
+    expect(runs[0].source_kind).toBe('ticket');
+    expect(runs[0].source_id).toBe('t7');
   });
 });

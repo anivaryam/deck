@@ -28,6 +28,22 @@ function isValidModel(m: unknown): boolean {
   return typeof m === 'string' && m.length <= 100 && /^claude[A-Za-z0-9._:-]+$/.test(m);
 }
 
+const FILE_CT: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+};
+// SVG/HTML are intentionally NOT inlined (stored XSS via same-origin markup).
+const INLINE_CT = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']);
+const MAX_SERVE = 50 * 1024 * 1024;
+
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const { store, config, taskRunner, scheduler } = deps;
   const auth = deps.auth ?? new AuthSessions();
@@ -211,4 +227,45 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       return { path: path.relative(sess.project_path, dest) };
     },
   );
+
+  app.get<{ Params: { sessionId: string; '*': string } }>('/api/file/:sessionId/*', async (req, reply) => {
+    const sess = store.get(req.params.sessionId);
+    if (!sess) return reply.code(404).send({ error: 'unknown session' });
+
+    const rel = req.params['*'];
+    if (!rel) return reply.code(400).send({ error: 'path required' });
+
+    const root = path.resolve(sess.project_path);
+    const dest = path.resolve(root, rel);
+    // Jail: resolved path must stay strictly under the project root.
+    if (dest !== root && !dest.startsWith(root + path.sep)) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+
+    let realRoot: string;
+    let realDest: string;
+    let stat: fs.Stats;
+    try {
+      realRoot = fs.realpathSync(root);
+      realDest = fs.realpathSync(dest);
+      stat = fs.statSync(realDest);
+    } catch {
+      return reply.code(404).send({ error: 'not found' });
+    }
+    // Symlink guard: the real (link-resolved) path must also stay under the real root.
+    if (realDest !== realRoot && !realDest.startsWith(realRoot + path.sep)) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+    if (!stat.isFile()) return reply.code(404).send({ error: 'not found' });
+    if (stat.size > MAX_SERVE) return reply.code(413).send({ error: 'file too large (max 50MB)' });
+
+    const ext = path.extname(realDest).toLowerCase();
+    const ct = FILE_CT[ext] ?? 'application/octet-stream';
+    const disposition = INLINE_CT.has(ct) ? 'inline' : 'attachment';
+    const safeName = path.basename(realDest).replace(/["\r\n]/g, '');
+    reply.header('Content-Type', ct);
+    reply.header('Content-Disposition', `${disposition}; filename="${safeName}"`);
+    reply.header('X-Content-Type-Options', 'nosniff');
+    return reply.send(fs.createReadStream(realDest));
+  });
 }

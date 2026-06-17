@@ -18,6 +18,7 @@ export function CronList({ crons }: { crons: Cron[] }) {
           <Switch
             checked={c.enabled === 1}
             onCheckedChange={(v) => toggle.mutate({ id: c.id, enabled: v })}
+            disabled={toggle.isPending}
           />
           <span className="min-w-0 flex-1">
             <span className="block truncate font-mono text-sm text-foreground">{c.schedule}</span>

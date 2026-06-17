@@ -34,7 +34,7 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
         {ticket.session_id && (
           <Link
             to="/tasks"
-            search={{ project: ticket.project_path }}
+            search={{ project: ticket.project_path, task: ticket.session_id ?? undefined }}
             className="mt-3 flex items-center gap-2 rounded-md border border-border bg-card p-3 text-[11px] text-primary"
           >
             ▸ linked task · view live output
@@ -44,7 +44,7 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
       <div className="flex gap-2 border-t border-border p-4">
         <Button
           className="flex-1"
-          disabled={run.isPending}
+          disabled={run.isPending || status === "running"}
           onClick={() => run.mutate(ticket.id)}
         >
           {run.isPending ? "Starting…" : "▶ Run"}

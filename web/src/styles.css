@@ -204,5 +204,10 @@
 
 @utility cv-auto {
   content-visibility: auto;
-  contain-intrinsic-size: 0 120px;
+  /* `auto` (not a fixed 0) lets the browser remember each element's last
+     rendered height instead of guessing a flat 120px for every offscreen item.
+     Message heights vary wildly (code blocks, tool output, images), so a fixed
+     guess made scrollHeight wrong — landing the bottom-stick off and drifting
+     the anchor as true heights were revealed on scroll. */
+  contain-intrinsic-size: auto 120px;
 }

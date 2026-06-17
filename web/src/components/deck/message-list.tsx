@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, FileText, Loader2, Paperclip } from "lucide-react";
+import { ChevronRight, ChevronUp, ExternalLink, FileText, Loader2, Paperclip } from "lucide-react";
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, ToolCall } from "@/lib/types";
@@ -10,13 +10,31 @@ const ROLE_PREFIX: Record<string, { text: string; cls: string }> = {
   system: { text: "system:", cls: "text-muted-foreground" },
 };
 
-export function MessageList({ messages, sessionId }: { messages: Message[]; sessionId?: string | null }) {
+export function MessageList({
+  messages,
+  sessionId,
+  hiddenCount = 0,
+}: {
+  messages: Message[];
+  sessionId?: string | null;
+  // How many older messages exist above the rendered window. When > 0 the list
+  // is virtualized to its tail, so the top banner would otherwise lie ("session
+  // started" above a mid-session window). Swap it for a scroll-up affordance.
+  hiddenCount?: number;
+}) {
   return (
     <div className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-6 sm:py-6">
-      <div className="mb-6 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground">
-        <div className="text-primary">claude-deck v0.1.0</div>
-        <div>session started · type / for commands · ^C to exit</div>
-      </div>
+      {hiddenCount > 0 ? (
+        <div className="mb-6 flex items-center gap-2 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground">
+          <ChevronUp className="size-3 text-primary/70" />
+          {hiddenCount} earlier message{hiddenCount === 1 ? "" : "s"} — scroll up to load
+        </div>
+      ) : (
+        <div className="mb-6 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground">
+          <div className="text-primary">claude-deck v0.1.0</div>
+          <div>session started · type / for commands · ^C to exit</div>
+        </div>
+      )}
 
       <ul className="space-y-5">
         {messages.map((m) => (

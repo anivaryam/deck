@@ -62,6 +62,10 @@ export interface Session {
   effort?: string | null;
   /** JSON array string of disabled built-in tool names (disallowedTools). */
   disabled_tools?: string | null;
+  source_kind?: string | null;
+  source_id?: string | null;
+  ended_at?: number | null;
+  result?: string | null;
   created_at: number;
 }
 

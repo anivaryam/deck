@@ -7,7 +7,15 @@ export function useTickets() {
 }
 
 export function useTasks() {
-  return useQuery({ queryKey: ["tasks"], queryFn: () => api.tasks(), refetchInterval: 5_000 });
+  return useQuery({ queryKey: ["tasks"], queryFn: () => api.tasks() });
+}
+
+export function useRuns(sourceKind: "cron" | "ticket", sourceId: string | null) {
+  return useQuery({
+    queryKey: ["runs", sourceKind, sourceId],
+    queryFn: () => (sourceId ? api.runs(sourceKind, sourceId) : Promise.resolve([])),
+    enabled: !!sourceId,
+  });
 }
 
 export function useTask(id: string | null) {

@@ -137,6 +137,12 @@ export const api = {
     );
   },
 
+  // ---- runs ----
+  async runs(sourceKind: "cron" | "ticket", sourceId: string): Promise<Session[]> {
+    const q = new URLSearchParams({ source_kind: sourceKind, source_id: sourceId });
+    return json(await fetch(`/api/runs?${q}`, { credentials: "same-origin" }));
+  },
+
   // ---- cron ----
   async listCron(): Promise<Cron[]> {
     return json(await fetch("/api/cron", { credentials: "same-origin" }));

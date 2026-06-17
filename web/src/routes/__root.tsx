@@ -1,7 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Outlet, Link, createRootRouteWithContext } from "@tanstack/react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import { useTaskEvents } from "@/lib/ws-events";
+import { toastForTask } from "@/lib/automation-events";
 
 function NotFoundComponent() {
   return (
@@ -52,12 +55,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/** Always-mounted hook: subscribes to the global task-event firehose and
+ *  invalidates React Query caches + fires sonner toasts on completion. */
+function TaskEventWatcher() {
+  const qc = useQueryClient();
+  useTaskEvents((frame) => {
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["tickets"] });
+    qc.invalidateQueries({ queryKey: ["cron"] });
+    qc.invalidateQueries({ queryKey: ["runs"] });
+    const t = toastForTask(frame);
+    if (t) (t.intent === "error" ? toast.error : toast.success)(t.message);
+  });
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
+        <TaskEventWatcher />
         <Outlet />
         <Toaster />
       </TooltipProvider>

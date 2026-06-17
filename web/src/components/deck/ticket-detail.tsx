@@ -4,6 +4,7 @@ import { StatusChip } from "./status-chip";
 import { useRunTicket } from "@/hooks/use-automation-data";
 import { normalizeTicketStatus, relativeTime } from "@/lib/automation";
 import type { Ticket } from "@/lib/types";
+import { RunHistory } from "./run-history";
 
 export function TicketDetail({ ticket }: { ticket: Ticket }) {
   const run = useRunTicket();
@@ -40,6 +41,10 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
             ▸ linked task · view live output
           </Link>
         )}
+        <div className="mt-3">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Runs</div>
+          <RunHistory sourceKind="ticket" sourceId={ticket.id} projectPath={ticket.project_path} />
+        </div>
       </div>
       <div className="flex gap-2 border-t border-border p-4">
         <Button

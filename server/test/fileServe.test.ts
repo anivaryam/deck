@@ -96,6 +96,44 @@ describe('GET /api/file/:sessionId/*', () => {
     expect(String(res.headers['content-disposition'])).toContain('inline');
   });
 
+  it('maps .jpg to image/jpeg', async () => {
+    const cookieHeader = await login();
+    const sess = store.create({ projectPath });
+    fs.writeFileSync(path.join(projectPath, '.deck-artifacts', 'pic.jpg'), Buffer.from([0xff, 0xd8, 0xff]));
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/file/${sess.id}/.deck-artifacts/pic.jpg`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('image/jpeg');
+    expect(String(res.headers['content-disposition'])).toContain('inline');
+  });
+
+  it('sets X-Content-Type-Options: nosniff', async () => {
+    const cookieHeader = await login();
+    const sess = store.create({ projectPath });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/file/${sess.id}/.deck-artifacts/shot.png`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('serves SVG as an attachment, never inline (XSS mitigation)', async () => {
+    const cookieHeader = await login();
+    const sess = store.create({ projectPath });
+    fs.writeFileSync(path.join(projectPath, '.deck-artifacts', 'x.svg'), '<svg onload="alert(1)"></svg>');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/file/${sess.id}/.deck-artifacts/x.svg`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(String(res.headers['content-disposition'])).toContain('attachment');
+  });
+
   it('serves an unknown type as an attachment download', async () => {
     const cookieHeader = await login();
     const sess = store.create({ projectPath });

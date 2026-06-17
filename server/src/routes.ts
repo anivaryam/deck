@@ -266,6 +266,13 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     reply.header('Content-Type', ct);
     reply.header('Content-Disposition', `${disposition}; filename="${safeName}"`);
     reply.header('X-Content-Type-Options', 'nosniff');
-    return reply.send(fs.createReadStream(realDest));
+    reply.header('Content-Length', stat.size);
+    const stream = fs.createReadStream(realDest);
+    // A regular file can still fail mid-read (I/O error, deleted after stat).
+    // Surface it as a clean 500 if nothing has been sent yet.
+    stream.on('error', () => {
+      if (!reply.sent) reply.code(500).send({ error: 'read failed' });
+    });
+    return reply.send(stream);
   });
 }

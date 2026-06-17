@@ -83,3 +83,18 @@ describe("filterTicketsByTab", () => {
     expect(TICKET_TABS[0]).toBe("all");
   });
 });
+
+describe("merged/closed statuses", () => {
+  it("normalizes merged and closed", () => {
+    expect(normalizeTicketStatus("merged")).toBe("merged");
+    expect(normalizeTicketStatus("closed")).toBe("closed");
+  });
+  it("TICKET_TABS includes merged and closed", () => {
+    expect(TICKET_TABS).toContain("merged");
+    expect(TICKET_TABS).toContain("closed");
+  });
+  it("has chip + dot classes for the new statuses (no undefined)", () => {
+    expect(statusChipClass("merged")).toBeTruthy();
+    expect(statusDotClass("closed")).toBeTruthy();
+  });
+});

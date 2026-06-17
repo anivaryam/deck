@@ -101,6 +101,8 @@ export class Store {
     listEnabledCron: Database.Statement;
     setCronEnabled: Database.Statement;
     deleteCron: Database.Statement;
+    deleteSession: Database.Statement;
+    deleteEventsForSession: Database.Statement;
     recordCronRun: Database.Statement;
     insertTicket: Database.Statement;
     getTicket: Database.Statement;
@@ -198,6 +200,8 @@ export class Store {
       listEnabledCron: db.prepare(`SELECT * FROM cron WHERE enabled = 1`),
       setCronEnabled: db.prepare(`UPDATE cron SET enabled = ? WHERE id = ?`),
       deleteCron: db.prepare(`DELETE FROM cron WHERE id = ?`),
+      deleteSession: db.prepare(`DELETE FROM session WHERE id = ?`),
+      deleteEventsForSession: db.prepare(`DELETE FROM event WHERE session_id = ?`),
       recordCronRun: db.prepare(`UPDATE cron SET last_run_at = ?, last_session_id = ? WHERE id = ?`),
       insertTicket: db.prepare(
         `INSERT INTO ticket (id, title, body, status, project_path, session_id, pr_url, created_at)
@@ -311,6 +315,15 @@ export class Store {
 
   deleteCron(id: string): void {
     this.stmts.deleteCron.run(id);
+  }
+
+  /** Delete a session and all of its events atomically. No-op if the id is unknown. */
+  deleteSession(id: string): void {
+    const txn = this.db.transaction((sid: string) => {
+      this.stmts.deleteEventsForSession.run(sid);
+      this.stmts.deleteSession.run(sid);
+    });
+    txn(id);
   }
 
   recordCronRun(id: string, sessionId: string): void {

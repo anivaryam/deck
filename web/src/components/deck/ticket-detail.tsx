@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "./status-chip";
-import { useRunTicket } from "@/hooks/use-automation-data";
+import { useRunTicket, useUpdateTicket } from "@/hooks/use-automation-data";
 import { normalizeTicketStatus, relativeTime } from "@/lib/automation";
 import type { Ticket } from "@/lib/types";
 import { RunHistory } from "./run-history";
 
 export function TicketDetail({ ticket }: { ticket: Ticket }) {
   const run = useRunTicket();
+  const update = useUpdateTicket();
   const status = normalizeTicketStatus(ticket.status);
 
   return (
@@ -54,6 +55,12 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
         >
           {run.isPending ? "Starting…" : "▶ Run"}
         </Button>
+        {status === "review" && (
+          <>
+            <Button className="flex-1" variant="ghost" onClick={() => update.mutate({ id: ticket.id, patch: { status: "closed" } })}>Close</Button>
+            <Button className="flex-1" onClick={() => update.mutate({ id: ticket.id, patch: { status: "merged" } })}>Mark merged</Button>
+          </>
+        )}
       </div>
     </div>
   );

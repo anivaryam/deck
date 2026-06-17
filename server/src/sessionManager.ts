@@ -153,7 +153,13 @@ export class SessionManager extends EventEmitter {
         abortController: ac,
         ...(sess.effort ? { effort: sess.effort } : {}),
         ...(disallowedTools.length ? { disallowedTools } : {}),
-        mcpServers: { deck: buildDeckMcp(this.store, sess.project_path) },
+        mcpServers: {
+          deck: buildDeckMcp(
+            this.store,
+            sess.project_path,
+            sess.source_kind === 'ticket' && sess.source_id ? sess.source_id : undefined,
+          ),
+        },
       };
       // Only skip permission checks when explicitly in bypass mode. Set
       // DECK_PERMISSION_MODE=default to re-enable the SDK's own gating.

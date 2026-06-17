@@ -1,8 +1,8 @@
 import type { Project, Session, Ticket } from "./types";
 
-export type AutomationStatus = "open" | "running" | "review" | "done" | "failed";
+export type AutomationStatus = "open" | "running" | "review" | "done" | "failed" | "merged" | "closed";
 
-const KNOWN: AutomationStatus[] = ["open", "running", "review", "done", "failed"];
+const KNOWN: AutomationStatus[] = ["open", "running", "review", "done", "failed", "merged", "closed"];
 
 export function normalizeTicketStatus(s: string | null | undefined): AutomationStatus {
   const v = (s ?? "").toLowerCase();
@@ -29,6 +29,10 @@ export function statusDotClass(s: AutomationStatus): string {
       return "bg-primary/60";
     case "failed":
       return "bg-destructive";
+    case "merged":
+      return "bg-primary";
+    case "closed":
+      return "bg-muted-foreground/40";
   }
 }
 
@@ -45,6 +49,10 @@ export function statusChipClass(s: AutomationStatus): string {
       return "border border-border text-muted-foreground";
     case "failed":
       return "bg-destructive/15 text-destructive";
+    case "merged":
+      return "bg-primary/15 text-primary";
+    case "closed":
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -69,7 +77,7 @@ export function byProjectPath<T extends { project_path: string }>(rows: T[], pat
   return rows.filter((r) => r.project_path === path);
 }
 
-export const TICKET_TABS = ["all", "open", "running", "review", "done", "failed"] as const;
+export const TICKET_TABS = ["all", "open", "running", "review", "done", "failed", "merged", "closed"] as const;
 export type TicketTab = (typeof TICKET_TABS)[number];
 
 export function filterTicketsByTab(rows: Ticket[], tab: TicketTab): Ticket[] {

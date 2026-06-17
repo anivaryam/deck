@@ -6,7 +6,7 @@ export class TaskRunner {
 
   constructor(
     private store: Store,
-    private manager: Pick<SessionManager, 'send'>,
+    private manager: Pick<SessionManager, 'send' | 'emit'>,
     private maxConcurrent = 6,
   ) {}
 
@@ -25,6 +25,15 @@ export class TaskRunner {
       });
       this.store.setStatus(task.id, 'errored');
       this.store.finishRun(task.id, 'queue_full');
+      // Emit the terminal lifecycle frame so listeners (ticketAutomation, the
+      // events channel) see queue-full outcomes — send() never runs on this path.
+      this.manager.emit?.('task', {
+        id: task.id,
+        source_kind: task.source_kind ?? null,
+        source_id: task.source_id ?? null,
+        status: 'errored',
+        result: 'queue_full',
+      });
       return task.id;
     }
 

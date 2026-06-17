@@ -1,13 +1,18 @@
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 /** Two-pane automation shell. Collapses to single column under 820px. */
 export function AutomationPage({
-  title,
+  projectName,
+  projectThreadId,
+  section,
   actions,
   list,
   detail,
 }: {
-  title: string;
+  projectName: string;
+  projectThreadId?: string;
+  section: string;
   actions?: ReactNode;
   list: ReactNode;
   detail?: ReactNode;
@@ -15,7 +20,21 @@ export function AutomationPage({
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h1 className="text-sm font-bold tracking-tight">{title}</h1>
+        <h1 className="font-mono text-xs font-medium tracking-tight text-muted-foreground">
+          {projectThreadId ? (
+            <Link
+              to="/$threadId"
+              params={{ threadId: projectThreadId }}
+              className="hover:text-foreground transition-colors"
+            >
+              {projectName}
+            </Link>
+          ) : (
+            <span>{projectName}</span>
+          )}
+          <span className="mx-1.5 select-none opacity-50">/</span>
+          <span className="font-bold text-foreground">{section}</span>
+        </h1>
         {actions}
       </div>
       <div className="flex min-h-0 flex-1">

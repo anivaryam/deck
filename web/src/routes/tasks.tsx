@@ -4,7 +4,7 @@ import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TasksList } from "@/components/deck/tasks-list";
 import { TaskOutput } from "@/components/deck/task-output";
 import { useTasks } from "@/hooks/use-automation-data";
-import { useProjects } from "@/hooks/use-deck-data";
+import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { byProjectPath, projectNameForPath } from "@/lib/automation";
 
 export const Route = createFileRoute("/tasks")({
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/tasks")({
 function TasksRoute() {
   const { project, task } = Route.useSearch();
   const projects = useProjects();
+  const sessions = useSessions();
   const { data } = useTasks();
   const [selId, setSelId] = useState<string | null>(task ?? null);
 
@@ -23,11 +24,21 @@ function TasksRoute() {
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
   const rows = useMemo(() => byProjectPath(data ?? [], project), [data, project]);
 
+  const projectThreadId = useMemo(() => {
+    const chats = (sessions.data ?? []).filter(
+      (s) => s.project_path === project && (s.kind ?? "chat") === "chat",
+    );
+    if (!chats.length) return undefined;
+    return chats.reduce((a, b) => (b.created_at > a.created_at ? b : a)).id;
+  }, [sessions.data, project]);
+
   if (!project) return <NoProject />;
 
   return (
     <AutomationPage
-      title={`Tasks · ${name ?? project}`}
+      projectName={name ?? project}
+      projectThreadId={projectThreadId}
+      section="Tasks"
       list={<TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />}
       detail={selId ? <TaskOutput taskId={selId} /> : undefined}
     />

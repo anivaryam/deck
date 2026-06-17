@@ -6,7 +6,7 @@ import { TicketsList } from "@/components/deck/tickets-list";
 import { TicketDetail } from "@/components/deck/ticket-detail";
 import { TicketForm } from "@/components/deck/ticket-form";
 import { useTickets } from "@/hooks/use-automation-data";
-import { useProjects } from "@/hooks/use-deck-data";
+import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import {
   byProjectPath,
   filterTicketsByTab,
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/tickets")({
 function TicketsRoute() {
   const { project } = Route.useSearch();
   const projects = useProjects();
+  const sessions = useSessions();
   const { data } = useTickets();
   const [tab, setTab] = useState<TicketTab>("all");
   const [selId, setSelId] = useState<string | null>(null);
@@ -35,11 +36,21 @@ function TicketsRoute() {
   );
   const selected = (data ?? []).find((t) => t.id === selId) ?? null;
 
+  const projectThreadId = useMemo(() => {
+    const chats = (sessions.data ?? []).filter(
+      (s) => s.project_path === project && (s.kind ?? "chat") === "chat",
+    );
+    if (!chats.length) return undefined;
+    return chats.reduce((a, b) => (b.created_at > a.created_at ? b : a)).id;
+  }, [sessions.data, project]);
+
   if (!project) return <NoProject />;
 
   return (
     <AutomationPage
-      title={`Tickets · ${name ?? project}`}
+      projectName={name ?? project}
+      projectThreadId={projectThreadId}
+      section="Tickets"
       actions={
         <Button disabled={!name} onClick={() => setCreating(true)}>
           + New ticket

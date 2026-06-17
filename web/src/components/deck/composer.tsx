@@ -1,5 +1,6 @@
 import { ArrowUp, AtSign, Mic, Paperclip, SlashSquare, Square, X } from "lucide-react";
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -9,6 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { loadDraft, saveDraft, clearDraft } from "@/lib/draft";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,12 +58,22 @@ function readBase64(file: File): Promise<string> {
 }
 
 export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => loadDraft(sessionId));
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [files, setFiles] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persist draft on every value change.
+  useEffect(() => {
+    saveDraft(sessionId, value);
+  }, [sessionId, value]);
+
+  // When sessionId changes (switching chats), load the new session's draft.
+  useEffect(() => {
+    setValue(loadDraft(sessionId));
+  }, [sessionId]);
 
   // Auto-grow with the content: collapse to measure, then snap to scrollHeight.
   // CSS max-height caps it; past the cap the textarea scrolls internally.
@@ -147,6 +159,7 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
     if ((!v && !hasAttachments) || busy || !connected) return;
     const suffix = files.length ? `\n\nAttached files: ${files.join(", ")}` : "";
     onSend(v + suffix, images);
+    clearDraft(sessionId);
     setValue("");
     setImages([]);
     setFiles([]);

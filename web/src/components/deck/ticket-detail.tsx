@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "./status-chip";
 import { useRunTicket } from "@/hooks/use-automation-data";
@@ -31,12 +32,13 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
         )}
         <Row k="created" v={relativeTime(ticket.created_at)} />
         {ticket.session_id && (
-          <a
-            href={`/tasks?project=${encodeURIComponent(ticket.project_path)}`}
+          <Link
+            to="/tasks"
+            search={{ project: ticket.project_path }}
             className="mt-3 flex items-center gap-2 rounded-md border border-border bg-card p-3 text-[11px] text-primary"
           >
             ▸ linked task · view live output
-          </a>
+          </Link>
         )}
       </div>
       <div className="flex gap-2 border-t border-border p-4">

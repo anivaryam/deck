@@ -1,0 +1,123 @@
+// server/src/wsHub.ts
+import type { FastifyInstance } from 'fastify';
+import type { WebSocket } from '@fastify/websocket';
+import type { SessionManager, DeckEvent } from './sessionManager.ts';
+import type { Store } from './store.ts';
+import type { Config } from './config.ts';
+import { isAuthed } from './routes.ts';
+import { AuthSessions, originAllowed } from './auth.ts';
+
+interface WsDeps {
+  store: Store;
+  manager: SessionManager;
+  config: Config;
+  auth: AuthSessions;
+}
+
+// Cap the socket send buffer. A slow client (mobile, throttled) on a fast stream
+// would otherwise accumulate unbounded data in process memory. Dropping live frames
+// is safe: the client re-syncs the gap on reconnect via `?since`.
+const MAX_BUFFERED = 8 * 1024 * 1024; // 8MB
+
+export function registerWs(app: FastifyInstance, deps: WsDeps): void {
+  const { store, manager, config, auth } = deps;
+  // sessionId -> set of sockets attached to it
+  const rooms = new Map<string, Set<WebSocket>>();
+
+  function send(socket: WebSocket, obj: unknown): void {
+    if (socket.readyState !== socket.OPEN) return;
+    if (socket.bufferedAmount > MAX_BUFFERED) return; // backpressure: drop; client re-syncs
+    socket.send(JSON.stringify(obj));
+  }
+
+  // Fan out every manager event to all sockets in that session's room.
+  manager.on('event', (ev: DeckEvent) => {
+    const room = rooms.get(ev.sessionId);
+    if (!room) return;
+    for (const s of room) send(s, { type: ev.type, payload: ev.payload, at: Date.now(), seq: ev.seq });
+  });
+
+  app.get('/ws/:id', { websocket: true }, (socket, req) => {
+    // Auth via the opaque session cookie (httpOnly, SameSite=strict) plus an Origin
+    // allowlist. SameSite=strict is the real cross-site WebSocket-hijacking (CSWSH)
+    // defense: a cross-site page can't attach the cookie, so it can never authenticate —
+    // Origin present or not. The Origin check is defense-in-depth, but reverse proxies /
+    // tunnels legitimately strip Origin on the WS upgrade (ours drops it so dev servers
+    // like Vite don't reject the public origin), which makes a hard requirement
+    // unworkable. So: require the cookie always, and reject only a PRESENT, disallowed
+    // Origin; a missing Origin falls back to the cookie + SameSite guarantee.
+    const origin = req.headers.origin;
+    const originOk = origin === undefined || originAllowed(origin, config.publicOrigin);
+    if (!isAuthed(req as any, auth) || !originOk) {
+      send(socket, { type: 'error', payload: { message: 'unauthorized' } });
+      socket.close();
+      return;
+    }
+
+    const sessionId = (req.params as { id: string }).id;
+    const session = store.get(sessionId);
+    if (!session) {
+      send(socket, { type: 'error', payload: { message: 'unknown session' } });
+      socket.close();
+      return;
+    }
+
+    // Join room
+    let room = rooms.get(sessionId);
+    if (!room) {
+      room = new Set();
+      rooms.set(sessionId, room);
+    }
+    room.add(socket);
+
+    // Delta replay: the client passes `?since=<lastSeq>`; replay only newer events
+    // (or all, if it has none). Each frame carries its seq so the client dedupes.
+    const sinceRaw = (req.query as { since?: string } | undefined)?.since;
+    const sinceNum = sinceRaw !== undefined ? Number(sinceRaw) : 0;
+    const since = Number.isFinite(sinceNum) && sinceNum > 0 ? sinceNum : 0;
+    for (const e of store.eventsSince(sessionId, since)) {
+      send(socket, { type: e.type, payload: e.payload, at: e.created_at, seq: e.seq });
+    }
+    send(socket, { type: 'ready', payload: { busy: manager.isActive(sessionId) } });
+
+    socket.on('message', async (raw: Buffer) => {
+      let parsed: { type?: string; text?: string; images?: any[] };
+      try {
+        parsed = JSON.parse(raw.toString());
+      } catch {
+        return send(socket, { type: 'error', payload: { message: 'bad json' } });
+      }
+      if (parsed.type === 'cancel') {
+        manager.cancel(sessionId);
+        return;
+      }
+      if (parsed.type === 'prompt' && parsed.text !== undefined) {
+        const imgs = Array.isArray(parsed.images)
+          ? parsed.images
+              .filter(
+                (x: any) =>
+                  x &&
+                  typeof x.media_type === 'string' &&
+                  typeof x.data === 'string' &&
+                  /^image\/(png|jpe?g|webp|gif)$/.test(x.media_type) &&
+                  x.data.length < 7_000_000,
+              )
+              .slice(0, 4)
+          : undefined;
+        if (manager.isActive(sessionId))
+          return send(socket, { type: 'busy', payload: { message: 'a turn is already running' } });
+        manager
+          .send(sessionId, parsed.text, imgs)
+          .catch((err) =>
+            send(socket, { type: 'error', payload: { message: err instanceof Error ? err.message : String(err) } }),
+          );
+        return;
+      }
+    });
+
+    socket.on('close', () => {
+      room?.delete(socket);
+      if (room && room.size === 0) rooms.delete(sessionId);
+    });
+  });
+}

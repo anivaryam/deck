@@ -1,0 +1,192 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - banner:
+            - generic:
+              - button:
+                - img
+            - generic:
+              - heading [level=1]: untitled session
+            - generic:
+              - button:
+                - img
+              - button:
+                - img
+          - generic:
+            - generic:
+              - generic:
+                - generic: claude-deck v0.1.0
+                - generic: session started · type / for commands · ^C to exit
+          - generic:
+            - generic:
+              - generic:
+                - generic: $
+                - textbox:
+                  - /placeholder: ask claude…
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - img
+                  - button [disabled]:
+                    - img
+    - region "Notifications alt+T"
+  - dialog [ref=e29]:
+    - button "Close" [active] [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+      - generic [ref=e34]: Close
+    - complementary [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - img [ref=e38]
+          - generic [ref=e41]: claude-deck
+        - generic [ref=e42]:
+          - button "Search" [ref=e43]:
+            - img
+          - button "New chat" [ref=e44]:
+            - img
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - button ".playwright-mcp 1" [ref=e47]:
+            - img [ref=e48]
+            - generic [ref=e50]:
+              - img [ref=e51]
+              - generic [ref=e56]: .playwright-mcp
+            - generic [ref=e57]: "1"
+          - list [ref=e58]:
+            - listitem [ref=e59]:
+              - link "untitled session 11m" [ref=e60] [cursor=pointer]:
+                - /url: /e26d5ecb-77b2-464c-97bf-be0a22f5bb31
+                - generic [ref=e62]: untitled session
+                - generic [ref=e63]: 11m
+            - listitem [ref=e64]:
+              - button "new chat" [ref=e65]:
+                - img [ref=e66]
+                - generic [ref=e68]: new chat
+        - button "ai-engineer-training 0" [ref=e70]:
+          - img [ref=e71]
+          - generic [ref=e73]:
+            - img [ref=e74]
+            - generic [ref=e79]: ai-engineer-training
+          - generic [ref=e80]: "0"
+        - button "ai-visibility-check 0" [ref=e82]:
+          - img [ref=e83]
+          - generic [ref=e85]:
+            - img [ref=e86]
+            - generic [ref=e91]: ai-visibility-check
+          - generic [ref=e92]: "0"
+        - button "borongan-clean-design-69 0" [ref=e94]:
+          - img [ref=e95]
+          - generic [ref=e97]:
+            - img [ref=e98]
+            - generic [ref=e103]: borongan-clean-design-69
+          - generic [ref=e104]: "0"
+        - button "borongan-information-management-system 0" [ref=e106]:
+          - img [ref=e107]
+          - generic [ref=e109]:
+            - img [ref=e110]
+            - generic [ref=e115]: borongan-information-management-system
+          - generic [ref=e116]: "0"
+        - button "borongan-website 1" [ref=e118]:
+          - img [ref=e119]
+          - generic [ref=e121]:
+            - img [ref=e122]
+            - generic [ref=e127]: borongan-website
+          - generic [ref=e128]: "1"
+        - button "chatgpt-store-suggestions 0" [ref=e130]:
+          - img [ref=e131]
+          - generic [ref=e133]:
+            - img [ref=e134]
+            - generic [ref=e139]: chatgpt-store-suggestions
+          - generic [ref=e140]: "0"
+        - button "claude-deck 1" [ref=e142]:
+          - img [ref=e143]
+          - generic [ref=e145]:
+            - img [ref=e146]
+            - generic [ref=e151]: claude-deck
+          - generic [ref=e152]: "1"
+        - button "deck 4" [ref=e154]:
+          - img [ref=e155]
+          - generic [ref=e157]:
+            - img [ref=e158]
+            - generic [ref=e163]: deck
+          - generic [ref=e164]: "4"
+        - button "figma-design-exporter 0" [ref=e166]:
+          - img [ref=e167]
+          - generic [ref=e169]:
+            - img [ref=e170]
+            - generic [ref=e175]: figma-design-exporter
+          - generic [ref=e176]: "0"
+        - button "healthsync 0" [ref=e178]:
+          - img [ref=e179]
+          - generic [ref=e181]:
+            - img [ref=e182]
+            - generic [ref=e187]: healthsync
+          - generic [ref=e188]: "0"
+        - button "hr-management-system 0" [ref=e190]:
+          - img [ref=e191]
+          - generic [ref=e193]:
+            - img [ref=e194]
+            - generic [ref=e199]: hr-management-system
+          - generic [ref=e200]: "0"
+        - button "litter-box 0" [ref=e202]:
+          - img [ref=e203]
+          - generic [ref=e205]:
+            - img [ref=e206]
+            - generic [ref=e211]: litter-box
+          - generic [ref=e212]: "0"
+        - button "lowband-call 0" [ref=e214]:
+          - img [ref=e215]
+          - generic [ref=e217]:
+            - img [ref=e218]
+            - generic [ref=e223]: lowband-call
+          - generic [ref=e224]: "0"
+        - button "municipality-centralized-system 0" [ref=e226]:
+          - img [ref=e227]
+          - generic [ref=e229]:
+            - img [ref=e230]
+            - generic [ref=e235]: municipality-centralized-system
+          - generic [ref=e236]: "0"
+        - button "OnBoard-Mate 0" [ref=e238]:
+          - img [ref=e239]
+          - generic [ref=e241]:
+            - img [ref=e242]
+            - generic [ref=e247]: OnBoard-Mate
+          - generic [ref=e248]: "0"
+        - button "QCK 1" [ref=e250]:
+          - img [ref=e251]
+          - generic [ref=e253]:
+            - img [ref=e254]
+            - generic [ref=e259]: QCK
+          - generic [ref=e260]: "1"
+        - button "qck-client-dashboard 1" [ref=e262]:
+          - img [ref=e263]
+          - generic [ref=e265]:
+            - img [ref=e266]
+            - generic [ref=e271]: qck-client-dashboard
+          - generic [ref=e272]: "1"
+        - button "qckbot 1" [ref=e274]:
+          - img [ref=e275]
+          - generic [ref=e277]:
+            - img [ref=e278]
+            - generic [ref=e283]: qckbot
+          - generic [ref=e284]: "1"
+        - button "united-system 0" [ref=e286]:
+          - img [ref=e287]
+          - generic [ref=e289]:
+            - img [ref=e290]
+            - generic [ref=e295]: united-system
+          - generic [ref=e296]: "0"
+        - button "wrp 0" [ref=e298]:
+          - img [ref=e299]
+          - generic [ref=e301]:
+            - img [ref=e302]
+            - generic [ref=e307]: wrp
+          - generic [ref=e308]: "0"
+      - generic [ref=e310]:
+        - generic [ref=e311]: CD
+        - generic [ref=e312]:
+          - generic [ref=e313]: deck@local
+          - generic [ref=e314]: 10 sessions

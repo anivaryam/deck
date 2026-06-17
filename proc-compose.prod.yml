@@ -1,0 +1,35 @@
+# Production single-port stack: the Fastify server serves the built SPA + /api + /ws
+# all from ONE origin (:8787). No vite, no merge-port — so the auth cookie rides the
+# same-origin WebSocket upgrade with nothing to strip it (merge-port v1.0.0 drops the
+# Cookie header on WS upgrades, which breaks the chat over the tunnel).
+#
+# Rebuild the SPA after any web/ change:  bun --cwd web run build
+# Then:                                    proc-compose -f proc-compose.prod.yml up --silent
+#
+# Dev mode (hot reload, local only) still lives in proc-compose.yml.
+
+processes:
+  server:
+    # `env -u ANTHROPIC_API_KEY` → SDK uses the claude.ai subscription login
+    # (~/.claude/.credentials.json) instead of a metered API key. Serves web/dist
+    # because it exists at boot (build first).
+    cmd: env -u ANTHROPIC_API_KEY npm --prefix server start
+    env:
+      PORT: "8787"
+      # Immediate subdirs = the projects shown in the sidebar. Server never reads .env;
+      # without this it falls back to process.cwd() and lists the wrong tree.
+      PROJECTS_ROOT: "/home/anivaryam/github/repositories/projects"
+      # Tunnel origin → WebSocket + CSRF Origin allowlist. Browser hits this host;
+      # must match exactly (scheme+host).
+      DECK_PUBLIC_ORIGIN: "https://deck.systems.apphorialabs.com"
+    ready_when:
+      http: http://localhost:8787/   # served index.html (200) once web/dist is built
+
+  # Public URL → tunnels the server directly (no merge-port). trap stops the relay on
+  # shutdown so the URL doesn't stay exposed; `wait` lets bash receive the signal.
+  tunnel:
+    cmd: bash -c 'trap "tunnel stop --name deck" EXIT TERM INT; tunnel http 8787 --name deck; wait'
+    depends_on: [server]
+    restart: on-failure
+    ready_when:
+      http: http://localhost:8787/

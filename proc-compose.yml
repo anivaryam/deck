@@ -1,0 +1,53 @@
+# Dev stack: backend (Fastify) + frontend (Vite SPA dev server).
+#
+# Dev (one URL, hot reload):     proc-compose up
+#   → backend :8787, vite :3000, merge-port unifies them on :8080
+#     /api /auth /ws → server, everything else → vite. Tunnel :8080.
+#
+# The chat WS auth requires the session cookie always and accepts a missing Origin
+# (the tunnel strips Origin on WS upgrades; SameSite=strict on the cookie is the real
+# CSWSH defense — see server/src/wsHub.ts). So the plain merge: block works; no custom
+# Origin handling needed in the proxy.
+#
+# Production (one port): build the SPA, then run only the server, which serves it:
+#   bun --cwd web run build && npm --prefix server start   → :8787  (see proc-compose.prod.yml)
+merge:
+  client: 3000                    # vite dev server
+  server: 8787                    # fastify backend
+  port: 8080                      # single origin → tunnel this
+  api_prefixes:                   # routes sent to server instead of vite
+    - /api
+    - /auth
+    - /ws
+
+processes:
+  server:
+    # `env -u ANTHROPIC_API_KEY` forces the SDK to use your claude.ai subscription
+    # login (~/.claude/.credentials.json) instead of a metered API key — no double spend.
+    # Remove it only if you deliberately want pay-per-token API billing.
+    cmd: env -u ANTHROPIC_API_KEY npm --prefix server start
+    env:
+      PORT: "8787"
+      # Root that sessions are jailed under; its immediate subdirs are the projects
+      # shown in the sidebar. The server never reads .env — without this it falls back
+      # to process.cwd() (the server package dir) and the sidebar lists
+      # node_modules/src/test instead of your real projects (and every existing chat,
+      # keyed by project_path, gets hidden).
+      PROJECTS_ROOT: "/home/anivaryam/github/repositories/projects"
+      # Public tunnel origin → lets the WebSocket pass the Origin allowlist when
+      # the chat is opened from a phone via https://deck.systems.apphorialabs.com.
+      # Without this, login + REST work over the tunnel but the chat WS is rejected.
+      DECK_PUBLIC_ORIGIN: "https://deck.systems.apphorialabs.com"
+
+  web:
+    cmd: sh -c 'cd web && bun run dev'
+    depends_on: [server]
+
+  # Public URL. trap stops the relay daemon on shutdown (else URL stays exposed);
+  # `wait` lets bash receive SIGTERM and fire the trap. Never add --silent.
+  tunnel:
+    cmd: bash -c 'trap "tunnel stop --name deck" EXIT TERM INT; tunnel http 8080 --name deck; wait'
+    depends_on: [merge-port]
+    restart: on-failure
+    ready_when:
+      http: http://localhost:8080/_health   # probe merge-port upstream, not the tunnel

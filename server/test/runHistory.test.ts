@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../src/store.ts';
 import { TaskRunner } from '../src/taskRunner.ts';
 import { Scheduler } from '../src/scheduler.ts';
+import { EventEmitter } from 'node:events';
 
 let store: Store;
 beforeEach(() => { store = new Store(':memory:'); });
@@ -73,5 +74,15 @@ describe('source threading', () => {
     const c = s.createCron({ schedule: '* * * * *', projectPath: '/p', prompt: 'nightly' });
     sched.fireCron(c.id);
     expect(created[0]).toMatchObject({ origin: 'cron', sourceKind: 'cron', sourceId: c.id });
+  });
+});
+
+describe('events channel contract', () => {
+  it('manager emits a task lifecycle frame that a listener receives', () => {
+    const mgr = new EventEmitter();
+    const received: any[] = [];
+    mgr.on('task', (f) => received.push(f));
+    mgr.emit('task', { id: 's1', source_kind: 'cron', source_id: 'c1', status: 'idle', result: 'success' });
+    expect(received).toEqual([{ id: 's1', source_kind: 'cron', source_id: 'c1', status: 'idle', result: 'success' }]);
   });
 });

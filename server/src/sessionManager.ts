@@ -76,7 +76,9 @@ export class SessionManager extends EventEmitter {
    *  caller can safely delete the session immediately afterward. */
   discard(id: string): void {
     this.deleting.add(id);
-    this.cancel(id);
+    // Only a running turn's `finally` clears `deleting`. With nothing in flight,
+    // clear it now so an idle discard can't permanently mute a (re)used id.
+    if (!this.cancel(id)) this.deleting.delete(id);
   }
 
   async send(sessionId: string, promptText: string, images?: Array<{ media_type: string; data: string }>): Promise<void> {

@@ -43,4 +43,26 @@ describe('SessionManager.discard', () => {
     expect(events.some((e) => e.type === 'cancelled')).toBe(false);
     expect(mgr.isActive(s.id)).toBe(false);
   });
+
+  it('does not permanently mute an idle session it was called on', async () => {
+    const store = new Store(':memory:');
+    const s = store.create({ projectPath: '/p/proj' });
+
+    // A normal, completing fake turn.
+    const queryFn: QueryFn = (() =>
+      (async function* () {
+        yield { type: 'assistant', uuid: 'b1' };
+        yield { type: 'result', subtype: 'success', uuid: 'b2', result: 'ok' };
+      })()) as unknown as QueryFn;
+
+    const mgr = new SessionManager(store, cfg, queryFn);
+
+    // discard with no turn in flight must NOT leave the id stuck in `deleting`.
+    mgr.discard(s.id);
+
+    await mgr.send(s.id, 'hello');
+
+    // Events recorded normally afterward: user prompt + b1 + b2 = 3.
+    expect(store.eventsSince(s.id, 0).length).toBe(3);
+  });
 });

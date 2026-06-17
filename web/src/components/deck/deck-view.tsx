@@ -237,7 +237,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
               onScroll={onScroll}
               className="scrollbar-thin scroll-fast absolute inset-0 overflow-y-auto"
             >
-              <MessageList messages={view} />
+              <MessageList messages={view} sessionId={activeThreadId} />
               {thinking && <ThinkingIndicator />}
             </div>
 

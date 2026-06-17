@@ -7,3 +7,7 @@ dist/
 *.db
 .DS_Store
 *.log
+.deck-artifacts/
+.deck-uploads/
+# Local Claude project instructions — runtime-loaded by the SDK, never committed.
+/CLAUDE.md

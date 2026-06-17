@@ -1,7 +1,8 @@
-import { ChevronRight, FileText, Loader2, Paperclip } from "lucide-react";
+import { ChevronRight, ExternalLink, FileText, Loader2, Paperclip } from "lucide-react";
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, ToolCall } from "@/lib/types";
+import { parseArtifacts, isPdfPath, isExternalHref, resolveSrc } from "@/lib/artifacts";
 
 const ROLE_PREFIX: Record<string, { text: string; cls: string }> = {
   user: { text: "you@deck:~$", cls: "text-[color:var(--prompt-user)]" },
@@ -9,7 +10,7 @@ const ROLE_PREFIX: Record<string, { text: string; cls: string }> = {
   system: { text: "system:", cls: "text-muted-foreground" },
 };
 
-export function MessageList({ messages }: { messages: Message[] }) {
+export function MessageList({ messages, sessionId }: { messages: Message[]; sessionId?: string | null }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-6 sm:py-6">
       <div className="mb-6 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground">
@@ -19,14 +20,14 @@ export function MessageList({ messages }: { messages: Message[] }) {
 
       <ul className="space-y-5">
         {messages.map((m) => (
-          <MessageBlock key={m.id} m={m} />
+          <MessageBlock key={m.id} m={m} sessionId={sessionId} />
         ))}
       </ul>
     </div>
   );
 }
 
-const MessageBlock = memo(function MessageBlock({ m }: { m: Message }) {
+const MessageBlock = memo(function MessageBlock({ m, sessionId }: { m: Message; sessionId?: string | null }) {
   const prefix = ROLE_PREFIX[m.role];
   const isUser = m.role === "user";
 
@@ -62,14 +63,17 @@ const MessageBlock = memo(function MessageBlock({ m }: { m: Message }) {
             </div>
           )}
 
-          {m.content && (
-            <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {m.content}
-              {m.streaming && (
-                <span className="caret-blink ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 bg-primary" />
-              )}
-            </div>
-          )}
+          {m.content &&
+            (m.role === "claude" ? (
+              <ArtifactContent content={m.content} sessionId={sessionId} streaming={m.streaming} />
+            ) : (
+              <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                {m.content}
+                {m.streaming && (
+                  <span className="caret-blink ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 bg-primary" />
+                )}
+              </div>
+            ))}
 
           {m.code && (
             <pre className="scrollbar-thin mt-2 overflow-x-auto rounded-md border border-border bg-[oklch(0.12_0_0)] p-3 text-[12.5px] leading-relaxed">
@@ -91,6 +95,107 @@ const MessageBlock = memo(function MessageBlock({ m }: { m: Message }) {
     </li>
   );
 });
+
+function PdfBlock({ url, label }: { url: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="my-1.5 block">
+      <span className="flex items-center gap-2">
+        <a
+          href={url}
+          download
+          className="inline-flex items-center gap-1.5 rounded border border-border bg-background/40 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+        >
+          <FileText className="size-3" />
+          {label}
+        </a>
+        <button onClick={() => setOpen((o) => !o)} className="text-[11px] text-primary/80 hover:text-primary">
+          {open ? "hide preview" : "preview"}
+        </button>
+      </span>
+      {open && (
+        <iframe src={url} title={label} sandbox="" className="mt-1 h-96 w-full rounded-md border border-border bg-white" />
+      )}
+    </span>
+  );
+}
+
+function ArtifactContent({
+  content,
+  sessionId,
+  streaming,
+}: {
+  content: string;
+  sessionId?: string | null;
+  streaming?: boolean;
+}) {
+  const caret = streaming ? (
+    <span className="caret-blink ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 bg-primary" />
+  ) : null;
+
+  // Without a session id we cannot build file URLs — fall back to plain text.
+  if (!sessionId) {
+    return (
+      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {content}
+        {caret}
+      </div>
+    );
+  }
+
+  const segments = parseArtifacts(content);
+  return (
+    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+      {segments.map((s, i) => {
+        const key = s.kind === "text" ? `t${i}` : `${s.kind}:${s.kind === "image" ? s.src : s.href}`;
+        if (s.kind === "text") return <span key={key}>{s.value}</span>;
+        if (s.kind === "image") {
+          const url = resolveSrc(s.src, sessionId);
+          return (
+            <a key={key} href={url} target="_blank" rel="noreferrer" className="my-1.5 block w-fit">
+              <img
+                src={url}
+                alt={s.alt}
+                loading="lazy"
+                className="max-h-80 rounded-md border border-border"
+              />
+            </a>
+          );
+        }
+        // External links (http/data/mailto) are ordinary hyperlinks, not artifacts.
+        if (isExternalHref(s.href)) {
+          return (
+            <a
+              key={key}
+              href={s.href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              {s.label || s.href}
+            </a>
+          );
+        }
+        const url = resolveSrc(s.href, sessionId);
+        if (isPdfPath(s.href)) {
+          return <PdfBlock key={key} url={url} label={s.label || "document.pdf"} />;
+        }
+        return (
+          <a
+            key={key}
+            href={url}
+            download
+            className="inline-flex items-center gap-1.5 rounded border border-border bg-background/40 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <ExternalLink className="size-3" />
+            {s.label || "download"}
+          </a>
+        );
+      })}
+      {caret}
+    </div>
+  );
+}
 
 function ToolBlock({ t }: { t: ToolCall }) {
   const [open, setOpen] = useState(false);

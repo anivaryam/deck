@@ -80,3 +80,31 @@ export interface ImageAttachment {
   data: string;
   name: string;
 }
+
+// ---- Automation wire types (mirror server/src/store.ts TicketRow / CronRow) ----
+export interface Ticket {
+  id: string;
+  title: string;
+  body: string | null;
+  status: string; // free-text; 'open' | 'running' | 'review' | 'done' | 'failed'
+  project_path: string;
+  session_id: string | null;
+  pr_url: string | null;
+  created_at: number;
+}
+
+export interface Cron {
+  id: string;
+  schedule: string;
+  project_path: string;
+  prompt: string;
+  enabled: number; // 0 | 1
+  last_run_at: number | null;
+  last_session_id: string | null;
+  created_at: number;
+}
+
+// GET /api/tasks/:id returns the task Session plus its full event stream.
+export interface TaskDetail extends Session {
+  events: DeckMessage[];
+}

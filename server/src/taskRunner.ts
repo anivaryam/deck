@@ -14,7 +14,7 @@ export class TaskRunner {
    *  session id immediately. A global concurrency cap bounds resource/quota use
    *  (denial-of-wallet protection); over the cap the task is recorded as errored
    *  instead of started. */
-  run(input: { projectPath: string; prompt: string; origin: SessionOrigin; title?: string; model?: string; effort?: string }): string {
+  run(input: { projectPath: string; prompt: string; origin: SessionOrigin; title?: string; model?: string; effort?: string; sourceKind?: 'cron' | 'ticket'; sourceId?: string }): string {
     const task = this.store.createTask(input);
 
     if (this.active >= this.maxConcurrent) {
@@ -24,6 +24,7 @@ export class TaskRunner {
         payload: { message: `task queue full (max ${this.maxConcurrent} concurrent) — not started` },
       });
       this.store.setStatus(task.id, 'errored');
+      this.store.finishRun(task.id, 'queue_full');
       return task.id;
     }
 

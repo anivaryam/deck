@@ -37,6 +37,25 @@ export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (se
     for (const s of room) send(s, { type: ev.type, payload: ev.payload, at: Date.now(), seq: ev.seq });
   });
 
+  // Global lifecycle firehose: every task start/finish, lightweight payload only.
+  const eventsRoom = new Set<WebSocket>();
+  manager.on('task', (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
+    for (const s of eventsRoom) send(s, { type: 'task', payload: frame, at: Date.now() });
+  });
+
+  app.get('/ws/events', { websocket: true }, (socket, req) => {
+    const origin = req.headers.origin;
+    const originOk = origin === undefined || originAllowed(origin, config.publicOrigin);
+    if (!isAuthed(req as any, auth) || !originOk) {
+      send(socket, { type: 'error', payload: { message: 'unauthorized' } });
+      socket.close();
+      return;
+    }
+    eventsRoom.add(socket);
+    send(socket, { type: 'ready', payload: {} });
+    socket.on('close', () => eventsRoom.delete(socket));
+  });
+
   app.get('/ws/:id', { websocket: true }, (socket, req) => {
     // Auth via the opaque session cookie (httpOnly, SameSite=strict) plus an Origin
     // allowlist. SameSite=strict is the real cross-site WebSocket-hijacking (CSWSH)

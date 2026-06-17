@@ -19,6 +19,10 @@ export interface SessionRow {
   effort: string | null;
   /** JSON array of built-in tool names to disable for this session (disallowedTools). */
   disabled_tools: string | null;
+  source_kind?: string | null;
+  source_id?: string | null;
+  ended_at?: number | null;
+  result?: string | null;
   created_at: number;
 }
 
@@ -112,6 +116,8 @@ export class Store {
     getTicket: Database.Statement;
     listTickets: Database.Statement;
     listTicketsByProject: Database.Statement;
+    finishRun: Database.Statement;
+    listRunsForSource: Database.Statement;
   };
   // Compiled once, like the prepared statements above — atomic session delete
   // (events first, then the row).
@@ -158,6 +164,10 @@ export class Store {
       ['model', `ALTER TABLE session ADD COLUMN model TEXT`],
       ['effort', `ALTER TABLE session ADD COLUMN effort TEXT`],
       ['disabled_tools', `ALTER TABLE session ADD COLUMN disabled_tools TEXT`],
+      ['source_kind', `ALTER TABLE session ADD COLUMN source_kind TEXT`],
+      ['source_id', `ALTER TABLE session ADD COLUMN source_id TEXT`],
+      ['ended_at', `ALTER TABLE session ADD COLUMN ended_at INTEGER`],
+      ['result', `ALTER TABLE session ADD COLUMN result TEXT`],
     ];
     for (const [name, sql] of additions) {
       if (!existing.has(name)) this.db.exec(sql);
@@ -185,8 +195,8 @@ export class Store {
          VALUES (?, ?, ?, NULL, 'idle', 'chat', NULL, 'manual', ?, ?, ?, ?)`,
       ),
       insertTask: db.prepare(
-        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, created_at)
-         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, source_kind, source_id, created_at)
+         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?, ?, ?)`,
       ),
       getSession: db.prepare(`SELECT * FROM session WHERE id = ?`),
       listAll: db.prepare(`SELECT * FROM session ORDER BY created_at DESC, rowid DESC`),
@@ -220,6 +230,10 @@ export class Store {
       getTicket: db.prepare(`SELECT * FROM ticket WHERE id = ?`),
       listTickets: db.prepare(`SELECT * FROM ticket ORDER BY created_at DESC`),
       listTicketsByProject: db.prepare(`SELECT * FROM ticket WHERE project_path = ? ORDER BY created_at DESC`),
+      finishRun: db.prepare(`UPDATE session SET ended_at = ?, result = ? WHERE id = ?`),
+      listRunsForSource: db.prepare(
+        `SELECT * FROM session WHERE source_kind = ? AND source_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      ),
     };
     this.deleteSessionTxn = db.transaction((sid: string) => {
       this.stmts.deleteEventsForSession.run(sid);
@@ -273,6 +287,8 @@ export class Store {
     model?: string;
     effort?: string;
     disabledTools?: string[];
+    sourceKind?: 'cron' | 'ticket';
+    sourceId?: string;
   }): SessionRow {
     const id = randomUUID();
     const created_at = Date.now();
@@ -285,9 +301,19 @@ export class Store {
       input.model ?? null,
       input.effort ?? null,
       input.disabledTools && input.disabledTools.length ? JSON.stringify(input.disabledTools) : null,
+      input.sourceKind ?? null,
+      input.sourceId ?? null,
       created_at,
     );
     return this.get(id)!;
+  }
+
+  finishRun(id: string, result: 'success' | 'error' | 'cancelled' | 'queue_full'): void {
+    this.stmts.finishRun.run(Date.now(), result, id);
+  }
+
+  listRunsForSource(sourceKind: 'cron' | 'ticket', sourceId: string, limit = 20): SessionRow[] {
+    return this.stmts.listRunsForSource.all(sourceKind, sourceId, limit) as SessionRow[];
   }
 
   listTasks(): SessionRow[] {

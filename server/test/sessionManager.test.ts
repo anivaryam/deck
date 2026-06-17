@@ -44,6 +44,18 @@ describe('SessionManager', () => {
     expect(store.eventsSince(s.id, 0).length).toBe(4);
   });
 
+  it('records run outcome for task sessions but leaves chat sessions untouched', async () => {
+    const chat = store.create({ projectPath: '/p/alpha' });
+    await mgr.send(chat.id, 'hi');
+    expect(store.get(chat.id)?.result == null).toBe(true);
+    expect(store.get(chat.id)?.ended_at == null).toBe(true);
+
+    const task = store.createTask({ projectPath: '/p/alpha', prompt: 'go', origin: 'manual' });
+    await mgr.send(task.id, 'go');
+    expect(store.get(task.id)?.result).toBe('success');
+    expect(typeof store.get(task.id)?.ended_at).toBe('number');
+  });
+
   it('auto-titles a session from its first prompt and never clobbers it', async () => {
     const s = store.create({ projectPath: '/p/alpha' });
     expect(store.get(s.id)?.title).toBeNull();

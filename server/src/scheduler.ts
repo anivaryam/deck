@@ -23,7 +23,7 @@ export class Scheduler {
   fireCron(id: string): void {
     const c = this.store.getCron(id);
     if (!c || c.enabled !== 1) return;
-    const sessionId = this.runner.run({ projectPath: c.project_path, prompt: c.prompt, origin: 'cron' });
+    const sessionId = this.runner.run({ projectPath: c.project_path, prompt: c.prompt, origin: 'cron', sourceKind: 'cron', sourceId: c.id });
     this.store.recordCronRun(id, sessionId);
   }
 

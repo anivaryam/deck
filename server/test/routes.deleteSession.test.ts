@@ -72,4 +72,43 @@ describe('DELETE /api/sessions/:id', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('discards an in-flight turn before deleting an active session', async () => {
+    // Wire a fresh app with a SPY manager that reports the session as active,
+    // to assert the route cancels the running turn (discard) before deleting.
+    const app2 = Fastify();
+    await app2.register(cookie);
+    const store2 = new Store(':memory:');
+    const s = store2.create({ projectPath: '/p/proj' });
+    const discarded: string[] = [];
+    const spyManager = {
+      isActive: (id: string) => id === s.id,
+      discard: (id: string) => discarded.push(id),
+    } as any;
+    const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+    const taskRunner = new TaskRunner(store2, { send: async () => {} } as any);
+    const scheduler = new Scheduler(store2, taskRunner);
+    registerRoutes(app2, {
+      store: store2,
+      config: cfg as any,
+      taskRunner,
+      scheduler,
+      manager: spyManager,
+      closeRoom: () => {},
+    });
+    await app2.ready();
+    const loginRes = await app2.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = loginRes.headers['set-cookie'] as string;
+
+    const res = await app2.inject({
+      method: 'DELETE',
+      url: `/api/sessions/${s.id}`,
+      headers: { cookie: cookieHeader },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(discarded).toEqual([s.id]); // discard called for the active session
+    expect(store2.get(s.id)).toBeUndefined(); // row removed
+    await app2.close();
+  });
 });

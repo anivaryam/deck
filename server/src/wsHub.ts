@@ -15,9 +15,27 @@ interface WsDeps {
 }
 
 // Cap the socket send buffer. A slow client (mobile, throttled) on a fast stream
-// would otherwise accumulate unbounded data in process memory. Dropping live frames
-// is safe: the client re-syncs the gap on reconnect via `?since`.
-const MAX_BUFFERED = 8 * 1024 * 1024; // 8MB
+// would otherwise accumulate unbounded data in process memory. Dropping a live
+// STREAM frame is safe: the client re-syncs the gap on reconnect via `?since`.
+export const MAX_BUFFERED = 8 * 1024 * 1024; // 8MB
+
+// Session lifecycle / terminal frames. Unlike streaming output (assistant text,
+// `user` tool results) these are tiny AND they flip sticky client UI state:
+// `result`/`cancelled`/`error` are the only live signals that clear the client's
+// `busy` flag — i.e. swap the Stop button back to Send. The authoritative re-sync
+// (`ready`, carrying server `busy`) is sent ONLY on (re)connect, so a dropped
+// terminal frame on a socket that stays open is NOT recoverable: `busy` stays
+// stuck true and the Stop button lingers after the turn ends (most visible on long
+// streaming responses, when the buffer is most congested). So these bypass the
+// backpressure cap; only large live STREAM frames are dropped.
+const CRITICAL_FRAME_TYPES = new Set(['ready', 'result', 'cancelled', 'error', 'deleted']);
+
+// Pure backpressure decision, exported for unit testing. Returns true only for a
+// non-critical frame while the buffer is over the cap.
+export function shouldDropFrame(type: unknown, bufferedAmount: number, maxBuffered: number = MAX_BUFFERED): boolean {
+  if (bufferedAmount <= maxBuffered) return false;
+  return !(typeof type === 'string' && CRITICAL_FRAME_TYPES.has(type));
+}
 
 export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (sessionId: string) => void } {
   const { store, manager, config, auth } = deps;
@@ -26,7 +44,8 @@ export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (se
 
   function send(socket: WebSocket, obj: unknown): void {
     if (socket.readyState !== socket.OPEN) return;
-    if (socket.bufferedAmount > MAX_BUFFERED) return; // backpressure: drop; client re-syncs
+    const type = (obj as { type?: unknown } | null)?.type;
+    if (shouldDropFrame(type, socket.bufferedAmount)) return; // backpressure: drop live stream frames; client re-syncs
     socket.send(JSON.stringify(obj));
   }
 

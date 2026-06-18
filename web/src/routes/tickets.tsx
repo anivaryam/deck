@@ -70,7 +70,7 @@ function TicketsRoute() {
           />
         )
       }
-      detail={selected ? <TicketDetail ticket={selected} /> : undefined}
+      detail={selected ? <TicketDetail ticket={selected} onDeleted={() => setSelId(null)} /> : undefined}
       onCloseDetail={() => setSelId(null)}
     />
   );

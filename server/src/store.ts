@@ -116,6 +116,7 @@ export class Store {
     getTicket: Database.Statement;
     listTickets: Database.Statement;
     listTicketsByProject: Database.Statement;
+    deleteTicket: Database.Statement;
     finishRun: Database.Statement;
     listRunsForSource: Database.Statement;
   };
@@ -230,6 +231,7 @@ export class Store {
       getTicket: db.prepare(`SELECT * FROM ticket WHERE id = ?`),
       listTickets: db.prepare(`SELECT * FROM ticket ORDER BY created_at DESC`),
       listTicketsByProject: db.prepare(`SELECT * FROM ticket WHERE project_path = ? ORDER BY created_at DESC`),
+      deleteTicket: db.prepare(`DELETE FROM ticket WHERE id = ?`),
       finishRun: db.prepare(`UPDATE session SET ended_at = ?, result = ? WHERE id = ?`),
       listRunsForSource: db.prepare(
         `SELECT * FROM session WHERE source_kind = ? AND source_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
@@ -423,5 +425,9 @@ export class Store {
     vals.push(id);
     // Column names are a fixed allowlist above — safe to interpolate.
     this.db.prepare(`UPDATE ticket SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  }
+
+  deleteTicket(id: string): void {
+    this.stmts.deleteTicket.run(id);
   }
 }

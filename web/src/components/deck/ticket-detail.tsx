@@ -1,15 +1,22 @@
 import { Link } from "@tanstack/react-router";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "./status-chip";
-import { useRunTicket, useUpdateTicket } from "@/hooks/use-automation-data";
+import { useDeleteTicket, useRunTicket, useUpdateTicket } from "@/hooks/use-automation-data";
 import { normalizeTicketStatus, relativeTime } from "@/lib/automation";
 import type { Ticket } from "@/lib/types";
 import { RunHistory } from "./run-history";
 
-export function TicketDetail({ ticket }: { ticket: Ticket }) {
+export function TicketDetail({ ticket, onDeleted }: { ticket: Ticket; onDeleted?: () => void }) {
   const run = useRunTicket();
   const update = useUpdateTicket();
+  const del = useDeleteTicket();
   const status = normalizeTicketStatus(ticket.status);
+
+  const onDelete = () => {
+    if (!window.confirm(`Delete ticket "${ticket.title}"? This cannot be undone.`)) return;
+    del.mutate(ticket.id, { onSuccess: () => onDeleted?.() });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -54,6 +61,17 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
           onClick={() => run.mutate(ticket.id)}
         >
           {run.isPending ? "Starting…" : "▶ Run"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Delete ticket"
+          title="Delete ticket"
+          disabled={del.isPending}
+          onClick={onDelete}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
         </Button>
         {status === "review" && (
           <>

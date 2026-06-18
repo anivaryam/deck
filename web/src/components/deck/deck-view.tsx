@@ -9,6 +9,7 @@ import { Composer } from "./composer";
 import { SettingsPanel } from "./settings-panel";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useStickToBottom } from "@/hooks/use-stick-to-bottom";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { useSocket } from "@/lib/ws";
 import { eventsToMessages } from "@/lib/adapt";
@@ -90,76 +91,22 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   // the height the newly-prepended older messages added (keeps the view anchored).
   const growAnchorRef = useRef<number | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [showJump, setShowJump] = useState(false);
-  // Whether to keep following the live bottom. This is *intent*, not a raw
-  // position read: it must flip false only when the user actively scrolls UP,
-  // never just because content grew below them. On a long chat the bottom races
-  // ahead as roughly one event per frame streams in (the WS commits per frame);
-  // a programmatic pin's own scroll event then reads an already-grown
-  // scrollHeight, computes "not at bottom", and — under the old position-only
-  // logic — latched this off, stranding the view at the top. Tracking scroll
-  // *direction* instead keeps us pinned through that growth.
-  const stickRef = useRef(true);
-  const lastTopRef = useRef(0);
+  // Keep the chat pinned to its live bottom as messages stream in; switching
+  // sessions re-engages follow. Same hook drives the task-progress view. The
+  // extra scroll callback grows the tail window as the user nears the top.
+  const { scrollRef, contentRef, showJump, onScroll, scrollToBottom } = useStickToBottom(
+    [view, thinking],
+    activeThreadId,
+    (el) => {
+      // Near the top with older messages still hidden → grow the window. Capture
+      // the pre-grow height so the layout effect can re-anchor the viewport.
+      if (el.scrollTop < GROW_TRIGGER_PX && view.length > visibleCount) {
+        growAnchorRef.current = el.scrollHeight;
+        setVisibleCount((n) => Math.min(view.length, n + WINDOW_STEP));
+      }
+    },
+  );
 
-  // Jump straight to the bottom (instant, not smooth: a conversation can be tens
-  // of thousands of px tall and a smooth scroll over that feels sluggish).
-  const pinToBottom = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    lastTopRef.current = el.scrollTop;
-  };
-
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const top = el.scrollTop;
-    const atBottom = el.scrollHeight - top - el.clientHeight < 80;
-    // Reaching the bottom re-engages follow; only a genuine upward scroll
-    // (scrollTop actually decreased) releases it. A "not at bottom" that comes
-    // from content growing below us — scrollTop unchanged — must NOT release,
-    // or streaming output would strand the reader at the top.
-    if (atBottom) stickRef.current = true;
-    else if (top < lastTopRef.current - 2) stickRef.current = false;
-    lastTopRef.current = top;
-    // Show the jump button only when following is off AND there's content below.
-    setShowJump(!stickRef.current && el.scrollHeight - el.clientHeight > 120);
-    // Near the top with older messages still hidden → grow the window. Capture
-    // the pre-grow height so the layout effect can re-anchor the viewport.
-    if (top < GROW_TRIGGER_PX && view.length > visibleCount) {
-      growAnchorRef.current = el.scrollHeight;
-      setVisibleCount((n) => Math.min(view.length, n + WINDOW_STEP));
-    }
-  };
-
-  const scrollToBottom = () => {
-    stickRef.current = true;
-    setShowJump(false);
-    pinToBottom();
-  };
-
-  // Follow the bottom as content grows — streaming tokens, replayed history, a
-  // late-loading <img>, or cv-auto messages re-laying-out to their real height
-  // — but only while the user is parked there. A ResizeObserver catches every
-  // height change, including ones that don't change `view`'s identity. Pinning
-  // only moves scrollTop (not the observed size), so it can't loop.
-  useEffect(() => {
-    const content = contentRef.current;
-    if (!content || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
-      if (stickRef.current) pinToBottom();
-    });
-    ro.observe(content);
-    return () => ro.disconnect();
-  }, []);
-
-  // Belt-and-suspenders: also pin on each React commit while following.
-  useEffect(() => {
-    if (stickRef.current) pinToBottom();
-  }, [view, thinking]);
   // After the window grows, offset scrollTop by the height the newly-prepended
   // older messages added, so the viewport stays anchored on what the user was
   // reading instead of jumping. Layout effect (pre-paint) avoids a visible flash.
@@ -169,14 +116,12 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       el.scrollTop += el.scrollHeight - growAnchorRef.current;
       growAnchorRef.current = null;
     }
-  }, [visibleCount]);
-  // Opening/switching a session should land at the latest message, not the top,
-  // and reset the window so a fresh session opens cheap (tail only).
+  }, [visibleCount, scrollRef]);
+
+  // Switching sessions resets the window so a fresh session opens cheap (tail
+  // only); the hook re-pins to the bottom on the same key.
   useEffect(() => {
-    stickRef.current = true;
-    setShowJump(false);
     setVisibleCount(WINDOW);
-    pinToBottom();
   }, [activeThreadId]);
 
   // The server auto-titles a session from its first prompt. Refetch the list on

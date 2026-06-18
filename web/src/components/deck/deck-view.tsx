@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { useSocket } from "@/lib/ws";
 import { eventsToMessages } from "@/lib/adapt";
+import { hiddenAbove, tailWindow } from "@/lib/window";
 import { EFFORTS, MODELS } from "@/lib/static-data";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,16 @@ import type { EffortLevel, ImageAttachment, Model, Session } from "@/lib/types";
 // "/$threadId", which remounts this component. The queued prompt is stashed at
 // module scope so it survives the remount and flushes once the new socket opens.
 let pendingOutbox: { id: string; text: string; images: ImageAttachment[] } | null = null;
+
+// Render only the tail of a long transcript. Opening a big session otherwise
+// builds the entire DOM (every bubble, code block, tool <pre>, image) up front
+// and only then jumps to the bottom — the visible "long wait". With a window
+// the open lands at the bottom instantly (≈WINDOW nodes), and scrolling near the
+// top grows the window by WINDOW_STEP, restoring the scroll anchor so older
+// messages appear in place rather than yanking the viewport.
+const WINDOW = 40;
+const WINDOW_STEP = 40;
+const GROW_TRIGGER_PX = 200;
 
 function tildify(p: string): string {
   return p.replace(/^\/home\/[^/]+/, "~");
@@ -70,6 +81,15 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   const lastMsg = view[view.length - 1];
   const thinking = busy && (!lastMsg || lastMsg.role === "user" || lastMsg.role === "system");
 
+  // Tail-window the transcript. `lastMsg`/`thinking` stay on the full `view` so
+  // the streaming caret and thinking indicator are unaffected by the window.
+  const [visibleCount, setVisibleCount] = useState(WINDOW);
+  const windowed = useMemo(() => tailWindow(view, visibleCount), [view, visibleCount]);
+  const hiddenCount = hiddenAbove(view.length, visibleCount);
+  // Pre-grow scrollHeight, captured so the layout effect can offset scrollTop by
+  // the height the newly-prepended older messages added (keeps the view anchored).
+  const growAnchorRef = useRef<number | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -107,6 +127,12 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
     lastTopRef.current = top;
     // Show the jump button only when following is off AND there's content below.
     setShowJump(!stickRef.current && el.scrollHeight - el.clientHeight > 120);
+    // Near the top with older messages still hidden → grow the window. Capture
+    // the pre-grow height so the layout effect can re-anchor the viewport.
+    if (top < GROW_TRIGGER_PX && view.length > visibleCount) {
+      growAnchorRef.current = el.scrollHeight;
+      setVisibleCount((n) => Math.min(view.length, n + WINDOW_STEP));
+    }
   };
 
   const scrollToBottom = () => {
@@ -134,11 +160,22 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   useEffect(() => {
     if (stickRef.current) pinToBottom();
   }, [view, thinking]);
-
-  // Opening/switching a session should land at the latest message, not the top.
+  // After the window grows, offset scrollTop by the height the newly-prepended
+  // older messages added, so the viewport stays anchored on what the user was
+  // reading instead of jumping. Layout effect (pre-paint) avoids a visible flash.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && growAnchorRef.current != null) {
+      el.scrollTop += el.scrollHeight - growAnchorRef.current;
+      growAnchorRef.current = null;
+    }
+  }, [visibleCount]);
+  // Opening/switching a session should land at the latest message, not the top,
+  // and reset the window so a fresh session opens cheap (tail only).
   useEffect(() => {
     stickRef.current = true;
     setShowJump(false);
+    setVisibleCount(WINDOW);
     pinToBottom();
   }, [activeThreadId]);
 
@@ -341,7 +378,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
               className="scrollbar-thin scroll-fast absolute inset-0 overflow-y-auto"
             >
               <div ref={contentRef}>
-                <MessageList messages={view} sessionId={activeThreadId} />
+                <MessageList messages={windowed} sessionId={activeThreadId} hiddenCount={hiddenCount} />
                 {thinking && <ThinkingIndicator />}
               </div>
             </div>

@@ -91,35 +91,74 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   const growAnchorRef = useRef<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
-  // Stick to the bottom only when the user is already near it; don't yank them
-  // back down while they're scrolled up reading earlier output.
+  // Whether to keep following the live bottom. This is *intent*, not a raw
+  // position read: it must flip false only when the user actively scrolls UP,
+  // never just because content grew below them. On a long chat the bottom races
+  // ahead as roughly one event per frame streams in (the WS commits per frame);
+  // a programmatic pin's own scroll event then reads an already-grown
+  // scrollHeight, computes "not at bottom", and — under the old position-only
+  // logic — latched this off, stranding the view at the top. Tracking scroll
+  // *direction* instead keeps us pinned through that growth.
   const stickRef = useRef(true);
+  const lastTopRef = useRef(0);
+
+  // Jump straight to the bottom (instant, not smooth: a conversation can be tens
+  // of thousands of px tall and a smooth scroll over that feels sluggish).
+  const pinToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    lastTopRef.current = el.scrollTop;
+  };
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    stickRef.current = atBottom;
-    // Show the jump button only when scrolled up AND there's real content below.
-    setShowJump(!atBottom && el.scrollHeight - el.clientHeight > 120);
+    const top = el.scrollTop;
+    const atBottom = el.scrollHeight - top - el.clientHeight < 80;
+    // Reaching the bottom re-engages follow; only a genuine upward scroll
+    // (scrollTop actually decreased) releases it. A "not at bottom" that comes
+    // from content growing below us — scrollTop unchanged — must NOT release,
+    // or streaming output would strand the reader at the top.
+    if (atBottom) stickRef.current = true;
+    else if (top < lastTopRef.current - 2) stickRef.current = false;
+    lastTopRef.current = top;
+    // Show the jump button only when following is off AND there's content below.
+    setShowJump(!stickRef.current && el.scrollHeight - el.clientHeight > 120);
     // Near the top with older messages still hidden → grow the window. Capture
     // the pre-grow height so the layout effect can re-anchor the viewport.
-    if (el.scrollTop < GROW_TRIGGER_PX && view.length > visibleCount) {
+    if (top < GROW_TRIGGER_PX && view.length > visibleCount) {
       growAnchorRef.current = el.scrollHeight;
       setVisibleCount((n) => Math.min(view.length, n + WINDOW_STEP));
     }
   };
+
   const scrollToBottom = () => {
-    const el = scrollRef.current;
-    // Instant, not smooth: conversations can be tens of thousands of px tall and
-    // a smooth scroll over that distance feels sluggish and can undershoot.
-    if (el) el.scrollTop = el.scrollHeight;
     stickRef.current = true;
     setShowJump(false);
+    pinToBottom();
   };
+
+  // Follow the bottom as content grows — streaming tokens, replayed history, a
+  // late-loading <img>, or cv-auto messages re-laying-out to their real height
+  // — but only while the user is parked there. A ResizeObserver catches every
+  // height change, including ones that don't change `view`'s identity. Pinning
+  // only moves scrollTop (not the observed size), so it can't loop.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickRef.current) pinToBottom();
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, []);
+
+  // Belt-and-suspenders: also pin on each React commit while following.
+  useEffect(() => {
+    if (stickRef.current) pinToBottom();
   }, [view, thinking]);
   // After the window grows, offset scrollTop by the height the newly-prepended
   // older messages added, so the viewport stays anchored on what the user was
@@ -137,6 +176,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
     stickRef.current = true;
     setShowJump(false);
     setVisibleCount(WINDOW);
+    pinToBottom();
   }, [activeThreadId]);
 
   // The server auto-titles a session from its first prompt. Refetch the list on
@@ -337,8 +377,10 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
               onScroll={onScroll}
               className="scrollbar-thin scroll-fast absolute inset-0 overflow-y-auto"
             >
-              <MessageList messages={windowed} sessionId={activeThreadId} hiddenCount={hiddenCount} />
-              {thinking && <ThinkingIndicator />}
+              <div ref={contentRef}>
+                <MessageList messages={windowed} sessionId={activeThreadId} hiddenCount={hiddenCount} />
+                {thinking && <ThinkingIndicator />}
+              </div>
             </div>
 
             {showJump && (

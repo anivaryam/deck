@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { NotificationsToggle } from "./notifications-toggle";
 
 /** Two-pane automation shell. Collapses to single column under 820px. */
 export function AutomationPage({
@@ -37,7 +38,10 @@ export function AutomationPage({
           <span className="mx-1.5 select-none opacity-50">/</span>
           <span className="font-bold text-foreground">{section}</span>
         </h1>
-        {actions}
+        <div className="flex items-center gap-1">
+          {actions}
+          <NotificationsToggle />
+        </div>
       </div>
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto border-r border-border">{list}</div>

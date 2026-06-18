@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Outlet, Link, createRootRouteWithContext } from "@tanstack/react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5,6 +6,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { useTaskEvents } from "@/lib/ws-events";
 import { toastForTask } from "@/lib/automation-events";
+import {
+  notificationForTask,
+  notificationsEnabled,
+  notificationsSupported,
+  registerServiceWorker,
+  showNotification,
+} from "@/lib/notifications";
 
 function NotFoundComponent() {
   return (
@@ -56,16 +64,33 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 /** Always-mounted hook: subscribes to the global task-event firehose and
- *  invalidates React Query caches + fires sonner toasts on completion. */
+ *  invalidates React Query caches + fires sonner toasts on completion.
+ *  When the user has opted in and the tab is backgrounded, also raises a native
+ *  browser/OS notification (works on mobile via the service worker). */
 function TaskEventWatcher() {
   const qc = useQueryClient();
+
+  // Register the service worker once so native notifications work on mobile
+  // (Android Chrome only allows notifications shown via a SW registration).
+  useEffect(() => {
+    if (notificationsSupported()) void registerServiceWorker();
+  }, []);
+
   useTaskEvents((frame) => {
     qc.invalidateQueries({ queryKey: ["tasks"], type: "active" });
     qc.invalidateQueries({ queryKey: ["tickets"], type: "active" });
     qc.invalidateQueries({ queryKey: ["cron"], type: "active" });
     qc.invalidateQueries({ queryKey: ["runs"], type: "active" });
+
     const t = toastForTask(frame);
     if (t) (t.intent === "error" ? toast.error : toast.success)(t.message);
+
+    // Native notification only when the tab is hidden — otherwise the in-app
+    // toast already covers it, and we avoid double-alerting the user.
+    if (notificationsEnabled() && document.hidden) {
+      const n = notificationForTask(frame);
+      if (n) void showNotification(n.title, { body: n.body, tag: `task-${frame.id}` });
+    }
   });
   return null;
 }

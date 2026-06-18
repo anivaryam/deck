@@ -13,3 +13,6 @@ dist/
 /CLAUDE.md
 
 .superpowers/
+
+# Playwright MCP scratch output
+.playwright-mcp/

@@ -265,6 +265,11 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       return store.getTicket(req.params.id);
     },
   );
+  app.delete<{ Params: { id: string } }>('/api/tickets/:id', async (req, reply) => {
+    if (!store.getTicket(req.params.id)) return reply.code(404).send({ error: 'not found' });
+    store.deleteTicket(req.params.id);
+    return reply.code(204).send();
+  });
   app.post<{ Params: { id: string } }>('/api/tickets/:id/run', async (req, reply) => {
     const tk = store.getTicket(req.params.id);
     if (!tk) return reply.code(404).send({ error: 'not found' });

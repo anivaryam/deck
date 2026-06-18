@@ -59,6 +59,14 @@ export function useRunTicket() {
   });
 }
 
+export function useDeleteTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTicket(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
+  });
+}
+
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({

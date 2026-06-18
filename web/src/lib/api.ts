@@ -227,4 +227,20 @@ export const api = {
       }),
     );
   },
+  async deleteTicket(id: string): Promise<void> {
+    const res = await fetch(`/api/tickets/${id}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      let msg = `${res.status}`;
+      try {
+        const b = await res.json();
+        if (b?.error) msg = b.error;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, msg);
+    }
+  },
 };

@@ -292,6 +292,26 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     scheduler.reload();
     return reply.code(204).send();
   });
+  app.post<{ Params: { id: string } }>('/api/cron/:id/run', async (req, reply) => {
+    const c = store.getCron(req.params.id);
+    if (!c) return reply.code(404).send({ error: 'not found' });
+    // Same overlap guard the scheduler applies — don't stack a second run (and its
+    // spend) on top of one already in flight. Min-interval is intentionally NOT
+    // checked here: a manual fire is an explicit user action.
+    if (c.last_session_id) {
+      const prev = store.get(c.last_session_id);
+      if (prev && prev.status === 'active') return reply.code(409).send({ error: 'a run is already in progress' });
+    }
+    const sessionId = taskRunner.run({
+      projectPath: c.project_path,
+      prompt: c.prompt,
+      origin: 'cron',
+      sourceKind: 'cron',
+      sourceId: c.id,
+    });
+    store.recordCronRun(c.id, sessionId);
+    return { session_id: sessionId };
+  });
 
   // tickets
   app.get('/api/tickets', async () => store.listTickets());

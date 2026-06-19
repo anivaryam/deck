@@ -122,3 +122,40 @@ describe('POST /api/tasks/:id/cancel', () => {
     expect(res.json().aborted).toBe(false);
   });
 });
+
+describe('POST /api/cron/:id/run', () => {
+  async function createCron(c: string): Promise<string> {
+    const res = await app.inject({
+      method: 'POST', url: '/api/cron', headers: { cookie: c },
+      payload: { schedule: '0 3 * * *', project: 'alpha', prompt: 'tick' },
+    });
+    return res.json().id;
+  }
+
+  it('404 for a missing cron', async () => {
+    const c = await login();
+    const res = await app.inject({ method: 'POST', url: '/api/cron/nope/run', headers: { cookie: c } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('fires immediately and returns a session_id, recording it on the cron', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({ method: 'POST', url: `/api/cron/${id}/run`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(200);
+    const { session_id } = res.json();
+    expect(typeof session_id).toBe('string');
+    const session = store.get(session_id)!;
+    expect(session.kind).toBe('task');
+    expect(session.origin).toBe('cron');
+    expect(store.getCron(id)!.last_session_id).toBe(session_id);
+  });
+
+  it('409 when the previous run is still active (overlap guard)', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    await app.inject({ method: 'POST', url: `/api/cron/${id}/run`, headers: { cookie: c } }); // run 1 stays active
+    const res = await app.inject({ method: 'POST', url: `/api/cron/${id}/run`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(409);
+  });
+});

@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { useDeleteCron, useUpdateCron } from "@/hooks/use-automation-data";
+import { useDeleteCron, useRunCron, useUpdateCron } from "@/hooks/use-automation-data";
 import { relativeTime } from "@/lib/automation";
 import { cn } from "@/lib/utils";
 import type { Cron } from "@/lib/types";
@@ -13,6 +13,12 @@ import { CronForm } from "./cron-form";
 export function CronList({ crons }: { crons: Cron[] }) {
   const toggle = useUpdateCron();
   const del = useDeleteCron();
+  const fire = useRunCron();
+  const onFire = (c: Cron) =>
+    fire.mutate(c.id, {
+      onSuccess: () => toast.success("Run started"),
+      onError: (e) => toast.error(`Couldn't start run: ${e instanceof Error ? e.message : "error"}`),
+    });
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -63,6 +69,9 @@ export function CronList({ crons }: { crons: Cron[] }) {
               >
                 <ChevronRight className={cn("size-4 transition-transform", open[c.id] && "rotate-90")} />
               </button>
+              <Button variant="ghost" size="sm" onClick={() => onFire(c)} disabled={fire.isPending} aria-label="Run now">
+                ▶ Run
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => setEditingId(c.id)}>
                 Edit
               </Button>

@@ -230,6 +230,18 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const id = taskRunner.run({ projectPath, prompt, origin: 'manual', model, effort });
     return { id };
   });
+  app.delete<{ Params: { id: string } }>('/api/tasks/:id', async (req, reply) => {
+    const s = store.get(req.params.id);
+    if (!s || s.kind !== 'task') return reply.code(404).send({ error: 'not found' });
+    // A run record is immutable history; deleting a live run would orphan its
+    // in-flight turn. Make the caller cancel first.
+    if (s.status === 'active' || manager?.isActive(req.params.id)) {
+      return reply.code(409).send({ error: 'cancel the task before deleting it' });
+    }
+    store.deleteSession(req.params.id); // reuses the event-cascade transaction
+    closeRoom?.(req.params.id);
+    return reply.code(204).send();
+  });
 
   // runs
   app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {

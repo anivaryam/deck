@@ -1,0 +1,98 @@
+// server/test/routes.interactive.test.ts
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
+import { Store } from '../src/store.ts';
+import { TaskRunner } from '../src/taskRunner.ts';
+import { Scheduler } from '../src/scheduler.ts';
+import { registerRoutes } from '../src/routes.ts';
+
+let root: string;
+let app: ReturnType<typeof Fastify>;
+let store: Store;
+let cancelSpy: ReturnType<typeof vi.fn>;
+let isActiveSpy: ReturnType<typeof vi.fn>;
+
+const TOKEN = 'interactive-test-token-9012';
+
+beforeEach(async () => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-interactive-'));
+  fs.mkdirSync(path.join(root, 'alpha'));
+
+  store = new Store(':memory:');
+  const fakeSdkManager = { send: async (_id: string, _p: string): Promise<void> => {}, emit: () => true } as any;
+  const taskRunner = new TaskRunner(store, fakeSdkManager);
+  const scheduler = new Scheduler(store, taskRunner);
+
+  cancelSpy = vi.fn(() => true);
+  isActiveSpy = vi.fn(() => false);
+  const manager = { cancel: cancelSpy, isActive: isActiveSpy, discard: vi.fn() } as any;
+
+  app = Fastify();
+  await app.register(cookie);
+  registerRoutes(app, {
+    store,
+    config: { token: TOKEN, projectsRoot: root, port: 1, model: 'claude-opus-4-8' },
+    taskRunner,
+    scheduler,
+    manager,
+  });
+  await app.ready();
+});
+
+afterEach(async () => {
+  await app.close();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+async function login(): Promise<string> {
+  const res = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+  return res.headers['set-cookie'] as string;
+}
+
+async function createTask(cookieHeader: string): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    headers: { cookie: cookieHeader },
+    payload: { project: 'alpha', prompt: 'do the thing' },
+  });
+  return res.json().id;
+}
+
+describe('DELETE /api/tasks/:id', () => {
+  it('404 for a missing id', async () => {
+    const c = await login();
+    const res = await app.inject({ method: 'DELETE', url: '/api/tasks/nope', headers: { cookie: c } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404 when the id is a chat session, not a task', async () => {
+    const c = await login();
+    const sess = await app.inject({
+      method: 'POST', url: '/api/sessions', headers: { cookie: c }, payload: { project: 'alpha' },
+    });
+    const id = sess.json().id;
+    const res = await app.inject({ method: 'DELETE', url: `/api/tasks/${id}`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('409 while the task is active', async () => {
+    const c = await login();
+    const id = await createTask(c); // taskRunner marks it active synchronously
+    const res = await app.inject({ method: 'DELETE', url: `/api/tasks/${id}`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('204 and removes a finished task', async () => {
+    const c = await login();
+    const id = await createTask(c);
+    store.setStatus(id, 'idle'); // simulate completion
+    const res = await app.inject({ method: 'DELETE', url: `/api/tasks/${id}`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(204);
+    expect(store.get(id)).toBeUndefined();
+  });
+});

@@ -242,6 +242,14 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     closeRoom?.(req.params.id);
     return reply.code(204).send();
   });
+  app.post<{ Params: { id: string } }>('/api/tasks/:id/cancel', async (req, reply) => {
+    const s = store.get(req.params.id);
+    if (!s || s.kind !== 'task') return reply.code(404).send({ error: 'not found' });
+    // Reuse the same abort path the chat WS + session-delete use. Idempotent:
+    // cancel() returns false when no turn is in flight.
+    const aborted = manager?.cancel(req.params.id) ?? false;
+    return { aborted };
+  });
 
   // runs
   app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {

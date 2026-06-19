@@ -96,3 +96,29 @@ describe('DELETE /api/tasks/:id', () => {
     expect(store.get(id)).toBeUndefined();
   });
 });
+
+describe('POST /api/tasks/:id/cancel', () => {
+  it('404 for a non-task id', async () => {
+    const c = await login();
+    const res = await app.inject({ method: 'POST', url: '/api/tasks/nope/cancel', headers: { cookie: c } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('aborts an active task via the manager and reports aborted:true', async () => {
+    const c = await login();
+    const id = await createTask(c);
+    const res = await app.inject({ method: 'POST', url: `/api/tasks/${id}/cancel`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().aborted).toBe(true);
+    expect(cancelSpy).toHaveBeenCalledWith(id);
+  });
+
+  it('is idempotent: aborted:false when nothing was running', async () => {
+    const c = await login();
+    const id = await createTask(c);
+    cancelSpy.mockReturnValueOnce(false);
+    const res = await app.inject({ method: 'POST', url: `/api/tasks/${id}/cancel`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().aborted).toBe(false);
+  });
+});

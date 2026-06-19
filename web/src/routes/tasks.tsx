@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TasksList } from "@/components/deck/tasks-list";
 import { TaskOutput } from "@/components/deck/task-output";
+import { TaskForm } from "@/components/deck/task-form";
 import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useTasks } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
@@ -21,6 +23,7 @@ function TasksRoute() {
   const { data } = tasksQ;
   useAuthRedirect(tasksQ.error, projects.error, sessions.error);
   const [selId, setSelId] = useState<string | null>(task ?? null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => { if (task) setSelId(task); }, [task]);
 
@@ -42,10 +45,19 @@ function TasksRoute() {
       projectName={name ?? project}
       projectThreadId={projectThreadId}
       section="Tasks"
+      actions={
+        <Button disabled={!name} onClick={() => setCreating(true)}>
+          + New task
+        </Button>
+      }
       list={
-        <AsyncBoundary query={tasksQ} label="tasks">
-          <TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />
-        </AsyncBoundary>
+        creating && name ? (
+          <TaskForm projectName={name} onDone={() => setCreating(false)} />
+        ) : (
+          <AsyncBoundary query={tasksQ} label="tasks">
+            <TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />
+          </AsyncBoundary>
+        )
       }
       detail={selId ? <TaskOutput taskId={selId} /> : undefined}
       onCloseDetail={() => setSelId(null)}

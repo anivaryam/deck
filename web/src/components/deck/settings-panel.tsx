@@ -56,16 +56,16 @@ export function SettingsPanel({
 
       <Tabs defaultValue="model" className="flex flex-1 flex-col">
         <TabsList className="m-2 grid h-8 grid-cols-4 bg-card">
-          <TabsTrigger value="model" className="text-[11px]">
+          <TabsTrigger value="model" aria-label="Model & reasoning" className="text-[11px]">
             <Cpu className="size-3.5" />
           </TabsTrigger>
-          <TabsTrigger value="tools" className="text-[11px]">
+          <TabsTrigger value="tools" aria-label="Built-in tools" className="text-[11px]">
             <Wrench className="size-3.5" />
           </TabsTrigger>
-          <TabsTrigger value="mcp" className="text-[11px]">
+          <TabsTrigger value="mcp" aria-label="MCP servers" className="text-[11px]">
             <Plug className="size-3.5" />
           </TabsTrigger>
-          <TabsTrigger value="perm" className="text-[11px]">
+          <TabsTrigger value="perm" aria-label="Permissions" className="text-[11px]">
             <ShieldCheck className="size-3.5" />
           </TabsTrigger>
         </TabsList>
@@ -124,11 +124,6 @@ export function SettingsPanel({
                 ? `this chat is locked to "${sessionEffort}" · selection applies to new chats`
                 : `applies when you start a new chat`}
             </p>
-
-            <Separator />
-            <SectionLabel>parameters</SectionLabel>
-            <Row label="temperature" value="0.7" />
-            <Row label="max tokens" value="4096" />
           </TabsContent>
 
           <TabsContent value="tools" className="mt-0 space-y-2">
@@ -157,6 +152,9 @@ export function SettingsPanel({
 
           <TabsContent value="mcp" className="mt-0 space-y-2">
             <SectionLabel>mcp servers</SectionLabel>
+            <p className="px-1 text-[10px] text-muted-foreground">
+              Example list — live per-session MCP status isn’t reported yet.
+            </p>
             {MCP_SERVERS.map((s) => (
               <div
                 key={s.name}
@@ -237,15 +235,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-1 text-[10px] uppercase tracking-wider text-muted-foreground">
       {children}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded border border-border bg-card px-2.5 py-1.5 text-xs">
-      <span className="truncate text-muted-foreground">{label}</span>
-      <span className="shrink-0 text-primary">{value}</span>
     </div>
   );
 }

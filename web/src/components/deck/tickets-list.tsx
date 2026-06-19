@@ -20,10 +20,12 @@ export function TicketsList({
 }) {
   return (
     <>
-      <div className="flex gap-1 overflow-x-auto border-b border-border px-4 py-2.5">
+      <div role="tablist" aria-label="Filter tickets" className="flex gap-1 overflow-x-auto border-b border-border px-4 py-2.5">
         {tabs.map((t) => (
           <button
             key={t}
+            role="tab"
+            aria-selected={activeTab === t}
             onClick={() => onTab(t)}
             className={cn(
               "whitespace-nowrap rounded-full border border-transparent px-3 py-1 text-xs capitalize text-muted-foreground",

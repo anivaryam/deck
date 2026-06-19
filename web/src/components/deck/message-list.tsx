@@ -94,7 +94,11 @@ const MessageBlock = memo(function MessageBlock({ m, sessionId }: { m: Message; 
             ))}
 
           {m.code && (
-            <pre className="scrollbar-thin mt-2 overflow-x-auto rounded-md border border-border bg-[oklch(0.12_0_0)] p-3 text-[12.5px] leading-relaxed">
+            <pre
+              tabIndex={0}
+              aria-label={`${m.code.lang || "code"} block`}
+              className="scrollbar-thin mt-2 overflow-x-auto rounded-md border border-border bg-[oklch(0.12_0_0)] p-3 text-[12.5px] leading-relaxed"
+            >
               <div className="mb-1.5 flex items-center justify-between border-b border-border/60 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <span>{m.code.lang}</span>
                 <span>↵ {m.code.value.split("\n").length} lines</span>
@@ -173,7 +177,7 @@ function ArtifactContent({
             <a key={key} href={url} target="_blank" rel="noreferrer" className="my-1.5 block w-fit">
               <img
                 src={url}
-                alt={s.alt}
+                alt={s.alt || s.src.split("/").pop() || "image"}
                 loading="lazy"
                 className="max-h-80 rounded-md border border-border"
               />
@@ -247,7 +251,11 @@ function ToolBlock({ t }: { t: ToolCall }) {
             <span className="min-w-0 truncate">{t.input}</span>
           </div>
           {t.output && (
-            <pre className="scrollbar-thin mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap break-words text-foreground/80">
+            <pre
+              tabIndex={0}
+              aria-label="tool output"
+              className="scrollbar-thin mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap break-words text-foreground/80"
+            >
               {t.outputFull || t.output}
             </pre>
           )}

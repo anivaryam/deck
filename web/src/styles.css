@@ -211,3 +211,16 @@
      the anchor as true heights were revealed on scroll. */
   contain-intrinsic-size: auto 120px;
 }
+
+/* Honour the OS "reduce motion" setting: kill the blinking caret, spinners, and
+   sheet slide/fade transitions for users who opt out of animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

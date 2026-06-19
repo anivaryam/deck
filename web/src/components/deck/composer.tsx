@@ -1,4 +1,4 @@
-import { ArrowUp, AtSign, Mic, Paperclip, SlashSquare, Square, X } from "lucide-react";
+import { ArrowUp, Paperclip, SlashSquare, Square, X } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -244,6 +244,15 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
 
         {error && <div className="mb-2 px-1 text-[11px] text-destructive">{error}</div>}
 
+        {/* Mobile-only connection cue: the desktop status row (below) is hidden on
+            small screens, so without this a disabled Send button has no explanation. */}
+        {!connected && (
+          <div className="mb-2 flex items-center gap-1.5 px-1 text-[11px] text-amber-500 sm:hidden">
+            <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+            reconnecting…
+          </div>
+        )}
+
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/30">
           <span className="select-none pb-2 pl-1 text-sm font-medium text-primary">$</span>
 
@@ -265,9 +274,6 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
             <input ref={fileInputRef} type="file" multiple onChange={onPick} className="hidden" />
             <IconBtn label="Attach" onClick={() => fileInputRef.current?.click()}>
               <Paperclip className="size-4" />
-            </IconBtn>
-            <IconBtn label="Mention context" className="hidden sm:inline-flex">
-              <AtSign className="size-4" />
             </IconBtn>
 
             <Popover>
@@ -300,10 +306,6 @@ export function Composer({ onSend, onCancel, busy, connected, sessionId }: Props
                 </ul>
               </PopoverContent>
             </Popover>
-
-            <IconBtn label="Voice" className="hidden sm:inline-flex">
-              <Mic className="size-4" />
-            </IconBtn>
 
             {busy && onCancel ? (
               <Button

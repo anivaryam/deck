@@ -339,11 +339,13 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     }
     return store.createTicket({ title, body, projectPath });
   });
-  app.patch<{ Params: { id: string }; Body: { status?: string; pr_url?: string } }>(
+  app.patch<{ Params: { id: string }; Body: { status?: string; pr_url?: string; title?: string; body?: string } }>(
     '/api/tickets/:id',
     async (req, reply) => {
       if (!store.getTicket(req.params.id)) return reply.code(404).send({ error: 'not found' });
-      store.updateTicket(req.params.id, { status: req.body?.status, pr_url: req.body?.pr_url });
+      const { status, pr_url, title, body } = req.body ?? {};
+      if (title !== undefined && !title.trim()) return reply.code(400).send({ error: 'title cannot be empty' });
+      store.updateTicket(req.params.id, { status, pr_url, title, body });
       return store.getTicket(req.params.id);
     },
   );

@@ -213,3 +213,46 @@ describe('PATCH /api/cron/:id (edit schedule/prompt)', () => {
     expect(res.json().enabled).toBe(0);
   });
 });
+
+describe('PATCH /api/tickets/:id (edit title/body)', () => {
+  async function createTicket(c: string): Promise<string> {
+    const res = await app.inject({
+      method: 'POST', url: '/api/tickets', headers: { cookie: c },
+      payload: { title: 'old title', project: 'alpha', body: 'old body' },
+    });
+    return res.json().id;
+  }
+
+  it('updates title and body', async () => {
+    const c = await login();
+    const id = await createTicket(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/tickets/${id}`, headers: { cookie: c },
+      payload: { title: 'new title', body: 'new body' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().title).toBe('new title');
+    expect(res.json().body).toBe('new body');
+  });
+
+  it('rejects an empty title with 400', async () => {
+    const c = await login();
+    const id = await createTicket(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/tickets/${id}`, headers: { cookie: c },
+      payload: { title: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still updates status', async () => {
+    const c = await login();
+    const id = await createTicket(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/tickets/${id}`, headers: { cookie: c },
+      payload: { status: 'done' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('done');
+  });
+});

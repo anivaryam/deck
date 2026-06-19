@@ -99,6 +99,7 @@ export class Store {
     insertEvent: Database.Statement;
     eventBySeq: Database.Statement;
     eventsSince: Database.Statement;
+    eventsTail: Database.Statement;
     setResume: Database.Statement;
     setStatus: Database.Statement;
     setTitle: Database.Statement;
@@ -207,6 +208,11 @@ export class Store {
       ),
       eventBySeq: db.prepare(`SELECT * FROM event WHERE seq = ?`),
       eventsSince: db.prepare(`SELECT * FROM event WHERE session_id = ? AND seq > ? ORDER BY seq ASC`),
+      // Last N events, returned in ascending seq order. Bounds payload + parse cost
+      // for long transcripts on the REST initial-load path and the PR-URL scan.
+      eventsTail: db.prepare(
+        `SELECT * FROM (SELECT * FROM event WHERE session_id = ? ORDER BY seq DESC LIMIT ?) ORDER BY seq ASC`,
+      ),
       setResume: db.prepare(`UPDATE session SET sdk_session_id = ? WHERE id = ?`),
       setStatus: db.prepare(`UPDATE session SET status = ? WHERE id = ?`),
       // Only-if-null: auto-title sets the first title, never clobbers a real one.
@@ -335,6 +341,12 @@ export class Store {
 
   eventsSince(sessionId: string, seq: number): EventRow[] {
     const rows = this.stmts.eventsSince.all(sessionId, seq) as any[];
+    return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
+  }
+
+  /** The last `limit` events for a session, ascending by seq. */
+  eventsTail(sessionId: string, limit: number): EventRow[] {
+    const rows = this.stmts.eventsTail.all(sessionId, limit) as any[];
     return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
   }
 

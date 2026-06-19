@@ -26,6 +26,21 @@ export interface Config {
    *  sessions; unattended task/cron runs fall back to a built-in default. Set
    *  DECK_MAX_TURNS to override both. */
   maxTurns?: number;
+  /** Model for unattended task/cron runs when the run specifies none. Lets you
+   *  point automation at a cheaper model than interactive chat (DECK_TASK_MODEL).
+   *  Falls back to `model` when unset. */
+  taskModel?: string;
+  /** Reasoning effort for unattended task/cron runs when none is specified
+   *  (DECK_TASK_EFFORT). Falls back to the SDK default when unset. */
+  taskEffort?: string;
+  /** Minimum seconds between cron fires. A schedule that would fire more often is
+   *  rejected at create time (DECK_CRON_MIN_INTERVAL_SEC, default 60). Optional so
+   *  partial test fixtures stay valid; consumers fall back to 60. */
+  cronMinIntervalSec?: number;
+  /** Auth session lifetime in ms (DECK_SESSION_TTL_DAYS, default 7). Shorter than
+   *  the old hard-coded 30 days to bound the window a captured cookie stays valid.
+   *  Optional so partial test fixtures stay valid; AuthSessions defaults otherwise. */
+  sessionTtlMs?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -44,6 +59,11 @@ export function loadConfig(
   if (token.length < 16) throw new Error('DECK_TOKEN must be at least 16 characters');
   if (/^change-me/i.test(token)) {
     throw new Error('DECK_TOKEN is still the example placeholder — set a real random secret (e.g. `openssl rand -hex 24`)');
+  }
+  // Warn (don't fail — avoid locking out an existing deploy) on a low-entropy token.
+  // The token guards an internet-reachable agent with full host power; <32 chars is weak.
+  if (token.length < 32) {
+    console.warn('[config] DECK_TOKEN is shorter than 32 chars — use a stronger secret (e.g. `openssl rand -hex 24`)');
   }
 
   const credsExist = opts.credentialsExist ?? localCredentialsExist();
@@ -86,5 +106,16 @@ export function loadConfig(
     permissionMode: env.DECK_PERMISSION_MODE || 'bypassPermissions',
     cookieSecure: env.DECK_COOKIE_SECURE !== undefined ? env.DECK_COOKIE_SECURE !== 'false' : undefined,
     maxTurns: env.DECK_MAX_TURNS && Number.isFinite(Number(env.DECK_MAX_TURNS)) ? Number(env.DECK_MAX_TURNS) : undefined,
+    taskModel: env.DECK_TASK_MODEL || undefined,
+    taskEffort: env.DECK_TASK_EFFORT || undefined,
+    cronMinIntervalSec:
+      env.DECK_CRON_MIN_INTERVAL_SEC && Number.isFinite(Number(env.DECK_CRON_MIN_INTERVAL_SEC))
+        ? Math.max(0, Number(env.DECK_CRON_MIN_INTERVAL_SEC))
+        : 60,
+    sessionTtlMs:
+      (env.DECK_SESSION_TTL_DAYS && Number.isFinite(Number(env.DECK_SESSION_TTL_DAYS))
+        ? Math.max(1, Number(env.DECK_SESSION_TTL_DAYS))
+        : 7) *
+      24 * 60 * 60 * 1000,
   };
 }

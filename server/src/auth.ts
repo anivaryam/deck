@@ -20,7 +20,7 @@ export function safeEqual(a: string, b: string): boolean {
 export class AuthSessions {
   private sessions = new Map<string, number>(); // id -> expiresAt (epoch ms)
 
-  constructor(private ttlMs = 1000 * 60 * 60 * 24 * 30) {}
+  constructor(private ttlMs = 1000 * 60 * 60 * 24 * 7) {}
 
   issue(now = Date.now()): string {
     const id = crypto.randomUUID();
@@ -36,7 +36,15 @@ export class AuthSessions {
       this.sessions.delete(id);
       return false;
     }
+    // Sliding window: an actively-used session keeps living; an idle one expires
+    // ttlMs after its last request, bounding the lifetime of a captured cookie.
+    this.sessions.set(id, now + this.ttlMs);
     return true;
+  }
+
+  /** Session TTL in ms — used to align the cookie maxAge with the server window. */
+  get ttl(): number {
+    return this.ttlMs;
   }
 
   revoke(id: string | undefined): void {

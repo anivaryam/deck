@@ -258,6 +258,28 @@ describe('SessionManager', () => {
     expect(sp.append).toContain('![');
   });
 
+  it('caps unattended task runs with a default maxTurns but leaves chat uncapped', async () => {
+    const oneResult = () => (async function* () { yield { type: 'result', uuid: 'r', result: 'ok' }; })();
+    const task = store.createTask({ projectPath: '/p/a', prompt: 'go', origin: 'cron' });
+    const chat = store.create({ projectPath: '/p/a' });
+
+    let taskOpts: Record<string, unknown> | undefined;
+    await new SessionManager(store, cfg, (a) => { taskOpts = a.options; return oneResult(); }).send(task.id, 'go');
+    expect(taskOpts?.maxTurns).toBe(40);
+
+    let chatOpts: Record<string, unknown> | undefined;
+    await new SessionManager(store, cfg, (a) => { chatOpts = a.options; return oneResult(); }).send(chat.id, 'hi');
+    expect(chatOpts?.maxTurns).toBeUndefined();
+  });
+
+  it('honours an explicit cfg.maxTurns for interactive sessions', async () => {
+    let opts: Record<string, unknown> | undefined;
+    const chat = store.create({ projectPath: '/p/a' });
+    const m = new SessionManager(store, { ...cfg, maxTurns: 12 }, (args) => { opts = args.options; return (async function* () { yield { type: 'result', uuid: 'r', result: 'ok' }; })(); });
+    await m.send(chat.id, 'hi');
+    expect(opts?.maxTurns).toBe(12);
+  });
+
   it('falls back to cfg.model when session model is null', async () => {
     const s = store.create({ projectPath: '/p/alpha' }); // no model
     let capturedModel: unknown;

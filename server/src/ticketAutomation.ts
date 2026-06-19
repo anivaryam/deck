@@ -31,7 +31,11 @@ export function registerTicketAutomation(manager: SessionManager, store: Store):
         // eventsSince returns parsed objects (store JSON-parses before returning).
         let prUrl = tk.pr_url;
         if (!prUrl) {
-          for (const e of store.eventsSince(frame.id, 0)) {
+          // A `gh pr create` URL surfaces near the end of the run, so scan only the
+          // last N events newest-first instead of stringifying the whole transcript.
+          const tail = store.eventsTail(frame.id, 50);
+          for (let i = tail.length - 1; i >= 0; i--) {
+            const e = tail[i];
             // payload is always a parsed object; stringify it to run the regex over the text
             const text = typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload ?? '');
             const m = PR_URL.exec(text);

@@ -23,9 +23,9 @@ async function main() {
   const store = new Store(process.env.DECK_DB || 'claude-deck.sqlite');
   const manager = new SessionManager(store, config);
   registerTicketAutomation(manager, store);
-  const taskRunner = new TaskRunner(store, manager);
+  const taskRunner = new TaskRunner(store, manager, 6, { model: config.taskModel, effort: config.taskEffort });
   const scheduler = new Scheduler(store, taskRunner);
-  const auth = new AuthSessions();
+  const auth = new AuthSessions(config.sessionTtlMs);
 
   const app = Fastify({
     // Redact secrets if request logging is ever expanded; covers the auth cookie

@@ -56,4 +56,28 @@ describe('loadConfig', () => {
     const cfg = loadConfig(env);
     expect(cfg.projectsRoots).toEqual(['/tmp/projects', '/tmp/tools']);
   });
+
+  it('parses maxTurns / task model+effort / cron-min-interval / session TTL', () => {
+    const cfg = loadConfig({
+      ...base,
+      DECK_MAX_TURNS: '25',
+      DECK_TASK_MODEL: 'claude-sonnet-4-5',
+      DECK_TASK_EFFORT: 'low',
+      DECK_CRON_MIN_INTERVAL_SEC: '120',
+      DECK_SESSION_TTL_DAYS: '3',
+    });
+    expect(cfg.maxTurns).toBe(25);
+    expect(cfg.taskModel).toBe('claude-sonnet-4-5');
+    expect(cfg.taskEffort).toBe('low');
+    expect(cfg.cronMinIntervalSec).toBe(120);
+    expect(cfg.sessionTtlMs).toBe(3 * 24 * 60 * 60 * 1000);
+  });
+
+  it('applies sane defaults when the new knobs are unset', () => {
+    const cfg = loadConfig(base);
+    expect(cfg.maxTurns).toBeUndefined();
+    expect(cfg.taskModel).toBeUndefined();
+    expect(cfg.cronMinIntervalSec).toBe(60);
+    expect(cfg.sessionTtlMs).toBe(7 * 24 * 60 * 60 * 1000);
+  });
 });

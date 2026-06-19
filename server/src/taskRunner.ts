@@ -8,6 +8,9 @@ export class TaskRunner {
     private store: Store,
     private manager: Pick<SessionManager, 'send' | 'emit'>,
     private maxConcurrent = 6,
+    /** Defaults applied to unattended runs that don't specify their own model/effort
+     *  (lets automation use a cheaper model than interactive chat). */
+    private taskDefaults: { model?: string; effort?: string } = {},
   ) {}
 
   /** Create a task session and fire its single prompt in the background. Returns the
@@ -15,7 +18,11 @@ export class TaskRunner {
    *  (denial-of-wallet protection); over the cap the task is recorded as errored
    *  instead of started. */
   run(input: { projectPath: string; prompt: string; origin: SessionOrigin; title?: string; model?: string; effort?: string; sourceKind?: 'cron' | 'ticket'; sourceId?: string }): string {
-    const task = this.store.createTask(input);
+    const task = this.store.createTask({
+      ...input,
+      model: input.model ?? this.taskDefaults.model,
+      effort: input.effort ?? this.taskDefaults.effort,
+    });
 
     if (this.active >= this.maxConcurrent) {
       this.store.appendEvent(task.id, {

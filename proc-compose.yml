@@ -1,8 +1,8 @@
 # Dev stack: backend (Fastify) + frontend (Vite SPA dev server).
 #
 # Dev (one URL, hot reload):     proc-compose up
-#   → backend :8787, vite :3000, merge-port unifies them on :8080
-#     /api /auth /ws → server, everything else → vite. Tunnel :8080.
+#   → backend :28787, vite :23000, merge-port unifies them on :28080
+#     /api /auth /ws → server, everything else → vite. Tunnel :28080.
 #
 # The chat WS auth requires the session cookie always and accepts a missing Origin
 # (the tunnel strips Origin on WS upgrades; SameSite=strict on the cookie is the real
@@ -10,11 +10,11 @@
 # Origin handling needed in the proxy.
 #
 # Production (one port): build the SPA, then run only the server, which serves it:
-#   bun --cwd web run build && npm --prefix server start   → :8787  (see proc-compose.prod.yml)
+#   bun --cwd web run build && npm --prefix server start   → :28787  (see proc-compose.prod.yml)
 merge:
-  client: 3000                    # vite dev server
-  server: 8787                    # fastify backend
-  port: 8080                      # single origin → tunnel this
+  client: 23000                   # vite dev server
+  server: 28787                   # fastify backend
+  port: 28080                     # single origin → tunnel this
   api_prefixes:                   # routes sent to server instead of vite
     - /api
     - /auth
@@ -27,7 +27,7 @@ processes:
     # Remove it only if you deliberately want pay-per-token API billing.
     cmd: env -u ANTHROPIC_API_KEY npm --prefix server start
     env:
-      PORT: "8787"
+      PORT: "28787"
       # Roots that sessions are jailed under; immediate subdirs of each are the
       # projects shown in the sidebar. PROJECTS_ROOTS is a colon-separated list in
       # priority order — first root wins on a name collision and is where new
@@ -48,8 +48,8 @@ processes:
   # Public URL. trap stops the relay daemon on shutdown (else URL stays exposed);
   # `wait` lets bash receive SIGTERM and fire the trap. Never add --silent.
   tunnel:
-    cmd: bash -c 'trap "tunnel stop --name deck" EXIT TERM INT; tunnel http 8080 --name deck; wait'
+    cmd: bash -c 'trap "tunnel stop --name deck" EXIT TERM INT; tunnel http 28080 --name deck; wait'
     depends_on: [merge-port]
     restart: on-failure
     ready_when:
-      http: http://localhost:8080/_health   # probe merge-port upstream, not the tunnel
+      http: http://localhost:28080/_health   # probe merge-port upstream, not the tunnel

@@ -5,7 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 
 // Backend the dev server proxies /api /auth /ws to. Override with DECK_API_TARGET.
-const apiTarget = process.env.DECK_API_TARGET || 'http://127.0.0.1:8787';
+const apiTarget = process.env.DECK_API_TARGET || 'http://127.0.0.1:28787';
 const wsTarget = apiTarget.replace(/^http/, 'ws');
 
 export default defineConfig({
@@ -17,7 +17,7 @@ export default defineConfig({
   ],
   server: {
     host: true, // bind 0.0.0.0 + :: so merge-port (IPv4) can reach it
-    port: 3000,
+    port: 23000,
     allowedHosts: true, // merge-port forwards the public tunnel Host header
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },

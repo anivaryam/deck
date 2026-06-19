@@ -64,7 +64,7 @@ function TasksRoute() {
       detail={
         selected ? (
           <div className="flex h-full flex-col">
-            <TaskActions task={selected} projectName={name ?? project} onDeleted={() => setSelId(null)} />
+            <TaskActions task={selected} projectName={name} onDeleted={() => setSelId(null)} />
             <TaskOutput taskId={selected.id} />
           </div>
         ) : selId ? (

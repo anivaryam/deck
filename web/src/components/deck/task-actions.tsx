@@ -14,7 +14,7 @@ export function TaskActions({
   onDeleted,
 }: {
   task: Session;
-  projectName: string;
+  projectName: string | null;
   onDeleted: () => void;
 }) {
   const cancel = useCancelTask();
@@ -28,7 +28,8 @@ export function TaskActions({
       onError: (e) => toast.error(`Couldn't cancel: ${e instanceof Error ? e.message : "error"}`),
     });
 
-  const onRerun = () =>
+  const onRerun = () => {
+    if (!projectName) return;
     rerun.mutate(
       { project: projectName, prompt: task.prompt ?? "", model: task.model ?? undefined, effort: task.effort ?? undefined },
       {
@@ -36,6 +37,7 @@ export function TaskActions({
         onError: (e) => toast.error(`Couldn't re-run: ${e instanceof Error ? e.message : "error"}`),
       },
     );
+  };
 
   const onDelete = () => {
     if (!window.confirm("Delete this task and its output? This cannot be undone.")) return;
@@ -54,7 +56,7 @@ export function TaskActions({
         </Button>
       ) : (
         <>
-          <Button variant="ghost" size="sm" disabled={rerun.isPending || !task.prompt} onClick={onRerun}>
+          <Button variant="ghost" size="sm" disabled={rerun.isPending || !task.prompt || !projectName} onClick={onRerun}>
             <RotateCcw className="mr-1 size-4" /> Re-run
           </Button>
           <Button variant="ghost" size="sm" disabled={del.isPending} onClick={onDelete} className="text-muted-foreground hover:text-destructive">

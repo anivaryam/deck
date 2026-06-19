@@ -1,22 +1,37 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useCreateCron } from "@/hooks/use-automation-data";
+import { useCreateCron, useUpdateCron } from "@/hooks/use-automation-data";
 import { ApiError } from "@/lib/api";
 
-export function CronForm({ projectName, onDone }: { projectName: string; onDone: () => void }) {
-  const [schedule, setSchedule] = useState("0 3 * * *");
-  const [prompt, setPrompt] = useState("");
+export function CronForm({
+  projectName,
+  onDone,
+  initial,
+}: {
+  projectName?: string;
+  onDone: () => void;
+  initial?: { id: string; schedule: string; prompt: string };
+}) {
+  const [schedule, setSchedule] = useState(initial?.schedule ?? "0 3 * * *");
+  const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [err, setErr] = useState<string | null>(null);
   const create = useCreateCron();
+  const update = useUpdateCron();
+  const editing = !!initial;
+  const pending = create.isPending || update.isPending;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     try {
-      await create.mutateAsync({ schedule, project: projectName, prompt });
+      if (editing) {
+        await update.mutateAsync({ id: initial!.id, patch: { schedule, prompt } });
+      } else {
+        await create.mutateAsync({ schedule, project: projectName!, prompt });
+      }
       onDone();
     } catch (x) {
-      setErr(x instanceof ApiError ? x.message : "failed to create cron");
+      setErr(x instanceof ApiError ? x.message : `failed to ${editing ? "update" : "create"} cron`);
     }
   }
 
@@ -42,8 +57,8 @@ export function CronForm({ projectName, onDone }: { projectName: string; onDone:
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!schedule || !prompt || create.isPending}>
-          {create.isPending ? "Creating…" : "Create cron"}
+        <Button type="submit" disabled={!schedule || !prompt || pending}>
+          {pending ? "Saving…" : editing ? "Save changes" : "Create cron"}
         </Button>
       </div>
     </form>

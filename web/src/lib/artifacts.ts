@@ -40,5 +40,7 @@ export function isPdfPath(p: string): boolean {
 }
 
 export function isExternalHref(href: string): boolean {
-  return /^(https?:|data:|mailto:)/i.test(href);
+  // Only http(s)/mailto render as live anchors. `data:` is excluded so model
+  // output can't surface a clickable data:-scheme phishing/spoof link.
+  return /^(https?:|mailto:)/i.test(href);
 }

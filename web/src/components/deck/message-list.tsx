@@ -132,7 +132,7 @@ function PdfBlock({ url, label }: { url: string; label: string }) {
         </button>
       </span>
       {open && (
-        <iframe src={url} title={label} sandbox="" className="mt-1 h-96 w-full rounded-md border border-border bg-white" />
+        <iframe src={url} title={label} sandbox="allow-same-origin" className="mt-1 h-96 w-full rounded-md border border-border bg-white" />
       )}
     </span>
   );

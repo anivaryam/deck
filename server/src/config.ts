@@ -22,6 +22,10 @@ export interface Config {
    *  DECK_COOKIE_SECURE=false only behind a plain-HTTP proxy that breaks the
    *  localhost secure-context exemption. */
   cookieSecure?: boolean;
+  /** Per-turn agent turn ceiling (SDK maxTurns). Unset = no cap for interactive
+   *  sessions; unattended task/cron runs fall back to a built-in default. Set
+   *  DECK_MAX_TURNS to override both. */
+  maxTurns?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -76,10 +80,11 @@ export function loadConfig(
     token,
     projectsRoot: projectsRoots[0],
     projectsRoots,
-    port: Number(env.PORT || 8787),
+    port: Number(env.PORT || 28787),
     model: env.DECK_MODEL || 'claude-opus-4-8',
     publicOrigin: env.DECK_PUBLIC_ORIGIN,
     permissionMode: env.DECK_PERMISSION_MODE || 'bypassPermissions',
     cookieSecure: env.DECK_COOKIE_SECURE !== undefined ? env.DECK_COOKIE_SECURE !== 'false' : undefined,
+    maxTurns: env.DECK_MAX_TURNS && Number.isFinite(Number(env.DECK_MAX_TURNS)) ? Number(env.DECK_MAX_TURNS) : undefined,
   };
 }

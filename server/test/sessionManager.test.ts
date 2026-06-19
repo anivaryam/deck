@@ -250,11 +250,12 @@ describe('SessionManager', () => {
       })();
     });
     await promptMgr.send(s.id, 'hi');
-    const sp = capturedOptions?.systemPrompt as string;
-    expect(typeof sp).toBe('string');
-    expect(sp).toContain('.deck-artifacts');
-    expect(sp).toContain('/api/file/');
-    expect(sp).toContain('![');
+    const sp = capturedOptions?.systemPrompt as { type: string; preset: string; append: string };
+    expect(sp.type).toBe('preset');
+    expect(sp.preset).toBe('claude_code');
+    expect(sp.append).toContain('.deck-artifacts');
+    expect(sp.append).toContain('/api/file/');
+    expect(sp.append).toContain('![');
   });
 
   it('falls back to cfg.model when session model is null', async () => {

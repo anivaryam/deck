@@ -298,7 +298,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
           <div className="h-full border-r border-border">{renderSidebar(false)}</div>
         ) : (
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="left" className="w-[85vw] max-w-[320px] border-r border-border bg-sidebar p-0">
+            <SheetContent title="Navigation" side="left" className="w-[85vw] max-w-[320px] border-r border-border bg-sidebar p-0">
               {renderSidebar(true)}
             </SheetContent>
           </Sheet>
@@ -351,6 +351,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
         {/* settings sheet */}
         <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
           <SheetContent
+            title="Settings"
             side="right"
             className={cn(
               "border-l border-border bg-sidebar p-0",

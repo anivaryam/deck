@@ -63,11 +63,12 @@ describe('type predicates', () => {
 });
 
 describe('isExternalHref', () => {
-  it('treats http(s)/data/mailto as external', () => {
+  it('treats http(s)/mailto as external but not data:', () => {
     expect(isExternalHref('https://example.com')).toBe(true);
     expect(isExternalHref('http://example.com')).toBe(true);
-    expect(isExternalHref('data:image/png;base64,AAAA')).toBe(true);
     expect(isExternalHref('mailto:a@b.com')).toBe(true);
+    // data: must NOT render as a live anchor (phishing/spoof channel).
+    expect(isExternalHref('data:image/png;base64,AAAA')).toBe(false);
   });
   it('treats project-relative paths as internal', () => {
     expect(isExternalHref('.deck-artifacts/report.pdf')).toBe(false);

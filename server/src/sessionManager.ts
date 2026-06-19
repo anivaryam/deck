@@ -145,12 +145,20 @@ export class SessionManager extends EventEmitter {
           /* ignore malformed value */
         }
       }
+      // Unattended task/cron runs get a turn ceiling so a stuck/looping agent
+      // can't burn tokens unbounded (denial-of-wallet). Interactive sessions are
+      // watched by a human, so only cap them if DECK_MAX_TURNS is set explicitly.
+      const maxTurns = sess.kind === 'task' ? (this.cfg.maxTurns ?? 40) : this.cfg.maxTurns;
       const options: Record<string, unknown> = {
         cwd: sess.project_path,
         model: sess.model || this.cfg.model,
-        systemPrompt: ARTIFACT_SYSTEM_PROMPT,
+        // Preset+append (not a bare string): preserves the claude_code system
+        // prompt AND its prompt-cache prefix. A plain string replaces the preset
+        // and forfeits the cache hit on every turn.
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: ARTIFACT_SYSTEM_PROMPT },
         permissionMode: mode,
         abortController: ac,
+        ...(maxTurns ? { maxTurns } : {}),
         ...(sess.effort ? { effort: sess.effort } : {}),
         ...(disallowedTools.length ? { disallowedTools } : {}),
         mcpServers: {

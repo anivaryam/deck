@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TasksList } from "@/components/deck/tasks-list";
 import { TaskOutput } from "@/components/deck/task-output";
+import { TaskActions } from "@/components/deck/task-actions";
 import { TaskForm } from "@/components/deck/task-form";
 import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useTasks } from "@/hooks/use-automation-data";
@@ -29,6 +30,7 @@ function TasksRoute() {
 
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
   const rows = useMemo(() => byProjectPath(data ?? [], project), [data, project]);
+  const selected = useMemo(() => (data ?? []).find((t) => t.id === selId) ?? null, [data, selId]);
 
   const projectThreadId = useMemo(() => {
     const chats = (sessions.data ?? []).filter(
@@ -59,7 +61,16 @@ function TasksRoute() {
           </AsyncBoundary>
         )
       }
-      detail={selId ? <TaskOutput taskId={selId} /> : undefined}
+      detail={
+        selected ? (
+          <div className="flex h-full flex-col">
+            <TaskActions task={selected} projectName={name ?? project} onDeleted={() => setSelId(null)} />
+            <TaskOutput taskId={selected.id} />
+          </div>
+        ) : selId ? (
+          <TaskOutput taskId={selId} />
+        ) : undefined
+      }
       onCloseDetail={() => setSelId(null)}
     />
   );

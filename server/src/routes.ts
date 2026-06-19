@@ -281,12 +281,25 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     scheduler.reload();
     return c;
   });
-  app.patch<{ Params: { id: string }; Body: { enabled?: boolean } }>('/api/cron/:id', async (req, reply) => {
-    if (!store.getCron(req.params.id)) return reply.code(404).send({ error: 'not found' });
-    if (typeof req.body?.enabled === 'boolean') store.setCronEnabled(req.params.id, req.body.enabled);
-    scheduler.reload();
-    return store.getCron(req.params.id);
-  });
+  app.patch<{ Params: { id: string }; Body: { enabled?: boolean; schedule?: string; prompt?: string } }>(
+    '/api/cron/:id',
+    async (req, reply) => {
+      if (!store.getCron(req.params.id)) return reply.code(404).send({ error: 'not found' });
+      const { enabled, schedule, prompt } = req.body ?? {};
+      if (schedule !== undefined) {
+        if (!Scheduler.isValid(schedule)) return reply.code(400).send({ error: 'invalid cron expression' });
+        const minGap = config.cronMinIntervalSec ?? 60;
+        const gap = Scheduler.minIntervalSec(schedule);
+        if (gap !== null && gap < minGap) {
+          return reply.code(400).send({ error: `cron fires too frequently — minimum ${minGap}s between runs` });
+        }
+      }
+      if (typeof enabled === 'boolean') store.setCronEnabled(req.params.id, enabled);
+      if (schedule !== undefined || prompt !== undefined) store.updateCron(req.params.id, { schedule, prompt });
+      scheduler.reload();
+      return store.getCron(req.params.id);
+    },
+  );
   app.delete<{ Params: { id: string } }>('/api/cron/:id', async (req, reply) => {
     store.deleteCron(req.params.id);
     scheduler.reload();

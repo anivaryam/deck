@@ -159,3 +159,57 @@ describe('POST /api/cron/:id/run', () => {
     expect(res.statusCode).toBe(409);
   });
 });
+
+describe('PATCH /api/cron/:id (edit schedule/prompt)', () => {
+  async function createCron(c: string): Promise<string> {
+    const res = await app.inject({
+      method: 'POST', url: '/api/cron', headers: { cookie: c },
+      payload: { schedule: '0 3 * * *', project: 'alpha', prompt: 'old' },
+    });
+    return res.json().id;
+  }
+
+  it('updates schedule and prompt', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c },
+      payload: { schedule: '0 4 * * *', prompt: 'new' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().schedule).toBe('0 4 * * *');
+    expect(res.json().prompt).toBe('new');
+  });
+
+  it('rejects an invalid schedule with 400', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c },
+      payload: { schedule: 'not a cron' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/invalid cron/i);
+  });
+
+  it('rejects a too-frequent schedule with 400', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c },
+      payload: { schedule: '*/30 * * * * *' }, // 30s gap < 60s min
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still toggles enabled', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c },
+      payload: { enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().enabled).toBe(0);
+  });
+});

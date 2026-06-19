@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { CronList } from "@/components/deck/cron-list";
 import { CronForm } from "@/components/deck/cron-form";
+import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useCron } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { byProjectPath, projectNameForPath } from "@/lib/automation";
@@ -17,7 +18,9 @@ function CronRoute() {
   const { project } = Route.useSearch();
   const projects = useProjects();
   const sessions = useSessions();
-  const { data } = useCron();
+  const cronQ = useCron();
+  const { data } = cronQ;
+  useAuthRedirect(cronQ.error, projects.error, sessions.error);
   const [creating, setCreating] = useState(false);
 
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
@@ -47,7 +50,9 @@ function CronRoute() {
         creating && name ? (
           <CronForm projectName={name} onDone={() => setCreating(false)} />
         ) : (
-          <CronList crons={rows} />
+          <AsyncBoundary query={cronQ} label="schedules">
+            <CronList crons={rows} />
+          </AsyncBoundary>
         )
       }
     />

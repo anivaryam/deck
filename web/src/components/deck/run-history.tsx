@@ -27,8 +27,21 @@ export function RunHistory({
   sourceId: string;
   projectPath: string;
 }) {
-  const { data } = useRuns(sourceKind, sourceId);
+  const { data, isLoading, isError, error, refetch } = useRuns(sourceKind, sourceId);
   const runs = data ?? [];
+  if (isLoading) {
+    return <p className="px-2 py-3 text-[11px] text-muted-foreground">Loading runs…</p>;
+  }
+  if (isError) {
+    return (
+      <p className="px-2 py-3 text-[11px] text-destructive">
+        Couldn’t load runs ({error instanceof Error ? error.message : "error"}).{" "}
+        <button onClick={() => refetch()} className="underline hover:text-foreground">
+          Retry
+        </button>
+      </p>
+    );
+  }
   if (!runs.length) {
     return <p className="px-2 py-3 text-[11px] text-muted-foreground">No runs yet.</p>;
   }

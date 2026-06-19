@@ -5,6 +5,7 @@ import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TicketsList } from "@/components/deck/tickets-list";
 import { TicketDetail } from "@/components/deck/ticket-detail";
 import { TicketForm } from "@/components/deck/ticket-form";
+import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useTickets } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import {
@@ -24,7 +25,9 @@ function TicketsRoute() {
   const { project } = Route.useSearch();
   const projects = useProjects();
   const sessions = useSessions();
-  const { data } = useTickets();
+  const ticketsQ = useTickets();
+  const { data } = ticketsQ;
+  useAuthRedirect(ticketsQ.error, projects.error, sessions.error);
   const [tab, setTab] = useState<TicketTab>("all");
   const [selId, setSelId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -60,14 +63,16 @@ function TicketsRoute() {
         creating && name ? (
           <TicketForm projectName={name} onDone={() => setCreating(false)} />
         ) : (
-          <TicketsList
-            tickets={rows}
-            tabs={TICKET_TABS}
-            activeTab={tab}
-            onTab={setTab}
-            selectedId={selId}
-            onSelect={(t) => setSelId(t.id)}
-          />
+          <AsyncBoundary query={ticketsQ} label="tickets">
+            <TicketsList
+              tickets={rows}
+              tabs={TICKET_TABS}
+              activeTab={tab}
+              onTab={setTab}
+              selectedId={selId}
+              onSelect={(t) => setSelId(t.id)}
+            />
+          </AsyncBoundary>
         )
       }
       detail={selected ? <TicketDetail ticket={selected} onDeleted={() => setSelId(null)} /> : undefined}

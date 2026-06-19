@@ -64,73 +64,111 @@ function resultFull(content: any): string {
   return text.length > CAP ? text.slice(0, CAP) + "\n…(truncated)" : text;
 }
 
-export function eventsToMessages(events: DeckMessage[]): Message[] {
-  const out: Message[] = [];
-  const toolIndex = new Map<string, number>(); // tool_use_id -> index in `out`
+interface FoldState {
+  out: Message[];
+  toolIndex: Map<string, number>; // tool_use_id -> index in `out`
+}
 
-  events.forEach((ev, i) => {
-    const time = clock(ev.at);
-    // Prefer the stable server seq for keys so collapsed/expanded tool state and
-    // memoization survive stream growth; fall back to the array index.
-    const k = ev.seq ?? i;
+// Fold a single event into the running state. Extracted so the full fold and the
+// incremental folder share identical logic. Mutates `state.out` by appending, and
+// (for tool results) by REPLACING the target message with a fresh object so a
+// memoized renderer sees a new identity and re-renders the filled-in output.
+function foldEvent(state: FoldState, ev: DeckMessage, i: number): void {
+  const { out, toolIndex } = state;
+  const time = clock(ev.at);
+  // Prefer the stable server seq for keys so collapsed/expanded tool state and
+  // memoization survive stream growth; fall back to the array index.
+  const k = ev.seq ?? i;
 
-    if (ev.type === "user") {
-      const p = ev.payload;
-      // Our own injected prompt event renders as a user bubble.
-      if (p?.type === "user_prompt") {
-        const imgs = Number(p.images ?? 0);
-        const attachments: Attachment[] | undefined =
-          imgs > 0 ? [{ name: `${imgs} image${imgs > 1 ? "s" : ""}`, kind: "image" }] : undefined;
-        out.push({ id: `m${k}-u`, role: "user", content: String(p.text ?? ""), attachments, time });
-        return;
-      }
-      // SDK `user` messages are tool results — fill the matching tool block's output.
-      const content = p?.message?.content ?? [];
-      for (const b of content) {
-        if (b?.type === "tool_result" && b.tool_use_id && toolIndex.has(b.tool_use_id)) {
-          const idx = toolIndex.get(b.tool_use_id)!;
-          const msg = out[idx];
-          if (msg?.tool)
-            msg.tool = { ...msg.tool, output: resultPreview(b.content), outputFull: resultFull(b.content) };
-        }
-      }
+  if (ev.type === "user") {
+    const p = ev.payload;
+    // Our own injected prompt event renders as a user bubble.
+    if (p?.type === "user_prompt") {
+      const imgs = Number(p.images ?? 0);
+      const attachments: Attachment[] | undefined =
+        imgs > 0 ? [{ name: `${imgs} image${imgs > 1 ? "s" : ""}`, kind: "image" }] : undefined;
+      out.push({ id: `m${k}-u`, role: "user", content: String(p.text ?? ""), attachments, time });
       return;
     }
-
-    if (ev.type === "assistant") {
-      const content = ev.payload?.message?.content ?? [];
-      const text = content
-        .filter((b: any) => b?.type === "text")
-        .map((b: any) => b.text)
-        .join("");
-      if (text.trim()) {
-        out.push({ id: `m${k}-t`, role: "claude", content: text, time });
+    // SDK `user` messages are tool results — fill the matching tool block's output.
+    const content = p?.message?.content ?? [];
+    for (const b of content) {
+      if (b?.type === "tool_result" && b.tool_use_id && toolIndex.has(b.tool_use_id)) {
+        const idx = toolIndex.get(b.tool_use_id)!;
+        const msg = out[idx];
+        if (msg?.tool)
+          out[idx] = { ...msg, tool: { ...msg.tool, output: resultPreview(b.content), outputFull: resultFull(b.content) } };
       }
-      const tools = content.filter((b: any) => b?.type === "tool_use");
-      tools.forEach((t: any, j: number) => {
-        out.push({
-          id: t.id ? `tool-${t.id}` : `m${k}-k${j}`,
-          role: "claude",
-          content: "",
-          tool: { name: String(t.name ?? "tool"), input: compactInput(t.input) },
-          time,
-        });
-        if (t.id) toolIndex.set(t.id, out.length - 1);
+    }
+    return;
+  }
+
+  if (ev.type === "assistant") {
+    const content = ev.payload?.message?.content ?? [];
+    const text = content
+      .filter((b: any) => b?.type === "text")
+      .map((b: any) => b.text)
+      .join("");
+    if (text.trim()) {
+      out.push({ id: `m${k}-t`, role: "claude", content: text, time });
+    }
+    const tools = content.filter((b: any) => b?.type === "tool_use");
+    tools.forEach((t: any, j: number) => {
+      out.push({
+        id: t.id ? `tool-${t.id}` : `m${k}-k${j}`,
+        role: "claude",
+        content: "",
+        tool: { name: String(t.name ?? "tool"), input: compactInput(t.input) },
+        time,
       });
-      return;
-    }
+      if (t.id) toolIndex.set(t.id, out.length - 1);
+    });
+    return;
+  }
 
-    if (ev.type === "error") {
-      out.push({ id: `m${k}-e`, role: "system", content: `✕ ${ev.payload?.message ?? "error"}`, time });
-      return;
-    }
+  if (ev.type === "error") {
+    out.push({ id: `m${k}-e`, role: "system", content: `✕ ${ev.payload?.message ?? "error"}`, time });
+    return;
+  }
 
-    if (ev.type === "cancelled") {
-      out.push({ id: `m${k}-c`, role: "system", content: "■ run cancelled", time });
-      return;
-    }
-    // system / result / ready / busy: not rendered in the transcript.
-  });
+  if (ev.type === "cancelled") {
+    out.push({ id: `m${k}-c`, role: "system", content: "■ run cancelled", time });
+    return;
+  }
+  // system / result / ready / busy: not rendered in the transcript.
+}
 
-  return out;
+/** Pure full fold over an event stream. Used for one-shot renders and tests. */
+export function eventsToMessages(events: DeckMessage[]): Message[] {
+  const state: FoldState = { out: [], toolIndex: new Map() };
+  events.forEach((ev, i) => foldEvent(state, ev, i));
+  return state.out;
+}
+
+/**
+ * Stateful folder for the live streaming path. On each call it processes ONLY the
+ * events appended since the previous call (the WS buffer is append-only and shares
+ * element identity across snapshots), so the O(n) fold work doesn't re-run every
+ * frame. If the input isn't an append of the last input (session switch, replay
+ * shrink), it transparently re-folds from scratch. Returns a fresh array each call
+ * so React memoization downstream observes the change.
+ */
+export function createIncrementalFolder(): (events: DeckMessage[]) => Message[] {
+  const state: FoldState = { out: [], toolIndex: new Map() };
+  let consumed = 0;
+  let anchor: DeckMessage | null = null; // identity of the last consumed event
+
+  return (events: DeckMessage[]): Message[] => {
+    const isAppend = events.length >= consumed && (consumed === 0 || events[consumed - 1] === anchor);
+    if (!isAppend) {
+      state.out = [];
+      state.toolIndex.clear();
+      consumed = 0;
+      anchor = null;
+    }
+    for (let i = consumed; i < events.length; i++) foldEvent(state, events[i], i);
+    consumed = events.length;
+    anchor = events.length ? events[events.length - 1] : null;
+    return state.out.slice();
+  };
 }

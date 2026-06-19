@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TasksList } from "@/components/deck/tasks-list";
 import { TaskOutput } from "@/components/deck/task-output";
+import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useTasks } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { byProjectPath, projectNameForPath } from "@/lib/automation";
@@ -16,7 +17,9 @@ function TasksRoute() {
   const { project, task } = Route.useSearch();
   const projects = useProjects();
   const sessions = useSessions();
-  const { data } = useTasks();
+  const tasksQ = useTasks();
+  const { data } = tasksQ;
+  useAuthRedirect(tasksQ.error, projects.error, sessions.error);
   const [selId, setSelId] = useState<string | null>(task ?? null);
 
   useEffect(() => { if (task) setSelId(task); }, [task]);
@@ -39,7 +42,11 @@ function TasksRoute() {
       projectName={name ?? project}
       projectThreadId={projectThreadId}
       section="Tasks"
-      list={<TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />}
+      list={
+        <AsyncBoundary query={tasksQ} label="tasks">
+          <TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />
+        </AsyncBoundary>
+      }
       detail={selId ? <TaskOutput taskId={selId} /> : undefined}
       onCloseDetail={() => setSelId(null)}
     />

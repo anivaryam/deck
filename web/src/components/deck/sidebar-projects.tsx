@@ -42,6 +42,10 @@ type Props = {
   // When rendered inside the mobile sheet, reserve room for the sheet's own
   // close (X) button so it doesn't overlap the header's action icons.
   reserveCloseButton?: boolean;
+  // Surface the projects-query state so an in-flight/failed load doesn't read as
+  // an empty "no projects found".
+  projectsLoading?: boolean;
+  projectsError?: boolean;
 };
 
 export function SidebarProjects({
@@ -54,6 +58,8 @@ export function SidebarProjects({
   onCreateProject,
   onDeleteSession,
   reserveCloseButton,
+  projectsLoading,
+  projectsError,
 }: Props) {
   // Only the active (or last-open) project starts expanded; the rest collapse.
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
@@ -212,7 +218,9 @@ export function SidebarProjects({
       {/* projects */}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {projects.length === 0 && (
-          <div className="px-2 py-4 text-xs text-muted-foreground">no projects found</div>
+          <div className="px-2 py-4 text-xs text-muted-foreground">
+            {projectsLoading ? "loading projects…" : projectsError ? "couldn’t load projects" : "no projects found"}
+          </div>
         )}
         {projects.map((p) => {
           const all = sessions.filter((t) => t.project_path === p.path);

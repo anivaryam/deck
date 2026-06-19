@@ -12,7 +12,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useStickToBottom } from "@/hooks/use-stick-to-bottom";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
 import { useSocket } from "@/lib/ws";
-import { eventsToMessages } from "@/lib/adapt";
+import { createIncrementalFolder } from "@/lib/adapt";
 import { hiddenAbove, tailWindow } from "@/lib/window";
 import { EFFORTS, MODELS } from "@/lib/static-data";
 import { api } from "@/lib/api";
@@ -65,7 +65,11 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   const [effort, setEffort] = useState<EffortLevel>("high");
 
   const { messages: raw, busy, connected, sendPrompt, cancel } = useSocket(activeThreadId ?? null);
-  const messages = useMemo(() => eventsToMessages(raw), [raw]);
+  // Incremental fold: only newly-appended events are processed each frame instead
+  // of re-folding the whole transcript. A fresh folder per session scopes the
+  // append-detection anchor (and it self-heals if the input isn't an append).
+  const folder = useMemo(() => createIncrementalFolder(), [activeThreadId]);
+  const messages = useMemo(() => folder(raw), [folder, raw]);
 
   // streaming caret on the trailing assistant text while a turn is running
   const view = useMemo(() => {
@@ -282,6 +286,8 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       onDeleteSession={handleDeleteSession}
       onNavigate={() => setSidebarOpen(false)}
       reserveCloseButton={inSheet}
+      projectsLoading={projectsQ.isLoading}
+      projectsError={projectsQ.isError}
     />
   );
 

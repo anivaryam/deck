@@ -19,7 +19,7 @@ export function CronList({ crons }: { crons: Cron[] }) {
   }
 
   const onToggle = (id: string, enabled: boolean) =>
-    toggle.mutate({ id, enabled }, { onError: (e) => toast.error(`Couldn’t update schedule: ${e instanceof Error ? e.message : "error"}`) });
+    toggle.mutate({ id, patch: { enabled } }, { onError: (e) => toast.error(`Couldn’t update schedule: ${e instanceof Error ? e.message : "error"}`) });
 
   const onDelete = (c: Cron) => {
     if (!window.confirm(`Delete this cron schedule?\n\n${c.schedule} — ${c.prompt}`)) return;

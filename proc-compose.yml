@@ -42,7 +42,10 @@ processes:
       DECK_PUBLIC_ORIGIN: "https://deck.systems.apphorialabs.com"
 
   web:
-    cmd: sh -c 'cd web && bun run dev'
+    # dev-watch.sh runs vite (HMR for normal edits) and full-restarts it on
+    # HMR-poison events — git checkout/commit/rebase/merge, deps, vite/ts config —
+    # so a long-lived vite never serves a torn/stale bundle. Hard-reload after.
+    cmd: bash web/dev-watch.sh
     depends_on: [server]
 
   # Public URL. trap stops the relay daemon on shutdown (else URL stays exposed);

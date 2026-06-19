@@ -40,6 +40,16 @@ function compactInput(input: any): string {
   }
 }
 
+// Normalize an SDK message `content` into a block array. The SDK normally sends
+// an array, but a string is valid for simple turns — without this, `.filter`/`for…of`
+// downstream would throw inside the fold (a render crash caught only by the route
+// ErrorComponent). A bare string becomes a single text block.
+function asBlocks(content: any): any[] {
+  if (Array.isArray(content)) return content;
+  if (typeof content === "string") return content ? [{ type: "text", text: content }] : [];
+  return [];
+}
+
 function resultText(content: any): string {
   let text = "";
   if (typeof content === "string") text = content;
@@ -91,7 +101,7 @@ function foldEvent(state: FoldState, ev: DeckMessage, i: number): void {
       return;
     }
     // SDK `user` messages are tool results — fill the matching tool block's output.
-    const content = p?.message?.content ?? [];
+    const content = asBlocks(p?.message?.content);
     for (const b of content) {
       if (b?.type === "tool_result" && b.tool_use_id && toolIndex.has(b.tool_use_id)) {
         const idx = toolIndex.get(b.tool_use_id)!;
@@ -104,7 +114,7 @@ function foldEvent(state: FoldState, ev: DeckMessage, i: number): void {
   }
 
   if (ev.type === "assistant") {
-    const content = ev.payload?.message?.content ?? [];
+    const content = asBlocks(ev.payload?.message?.content);
     const text = content
       .filter((b: any) => b?.type === "text")
       .map((b: any) => b.text)

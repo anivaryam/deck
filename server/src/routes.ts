@@ -333,7 +333,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       const buf = Buffer.from(dataBase64, 'base64');
       if (buf.length > 10 * 1024 * 1024) return reply.code(413).send({ error: 'file too large (max 10MB)' });
 
-      const base = path.basename(filename).replace(/[^\w.\- ]/g, '_');
+      // Drop spaces too: the deck artifact renderer tokenizes a path at the first
+      // whitespace, so a space in the stored name breaks inline rendering.
+      const base = path.basename(filename).replace(/[^\w.\-]/g, '_');
       const safe = base === '' || base === '.' || base === '..' ? 'upload.bin' : base;
       const dir = path.resolve(sess.project_path, '.deck-uploads');
       fs.mkdirSync(dir, { recursive: true });

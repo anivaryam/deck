@@ -2,7 +2,7 @@ import { ChevronRight, ChevronUp, ExternalLink, FileText, Loader2, Paperclip } f
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, ToolCall } from "@/lib/types";
-import { parseArtifacts, isPdfPath, isExternalHref, resolveSrc } from "@/lib/artifacts";
+import { parseArtifacts, isPdfPath, isImagePath, isExternalHref, resolveSrc } from "@/lib/artifacts";
 
 const ROLE_PREFIX: Record<string, { text: string; cls: string }> = {
   user: { text: "you@deck:~$", cls: "text-[color:var(--prompt-user)]" },
@@ -173,6 +173,25 @@ function ArtifactContent({
         if (s.kind === "text") return <span key={key}>{s.value}</span>;
         if (s.kind === "image") {
           const url = resolveSrc(s.src, sessionId);
+          // A markdown image token can still point at a non-image (e.g. ![x](notes.txt)).
+          // Remote/data-image URLs are trusted as images (the author meant one and they
+          // often lack an extension); a local path with a non-image extension renders as
+          // a download chip instead of a broken <img>.
+          const looksImage =
+            /^https?:/i.test(s.src) || /^data:image\//i.test(s.src) || isImagePath(s.src);
+          if (!looksImage) {
+            return (
+              <a
+                key={key}
+                href={url}
+                download
+                className="inline-flex items-center gap-1.5 rounded border border-border bg-background/40 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3" />
+                {s.alt || s.src.split("/").pop() || "download"}
+              </a>
+            );
+          }
           return (
             <a key={key} href={url} target="_blank" rel="noreferrer" className="my-1.5 block w-fit">
               <img

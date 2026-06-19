@@ -9,6 +9,32 @@ const BACKOFF_CAP = 10000; // 10s
 // scope so it survives component unmounts (navigating between threads).
 const eventCache = new Map<string, DeckMessage[]>();
 
+// Bound the cache so a long-lived tab that visits many sessions (or one very long
+// session) can't grow it without limit — each entry holds that session's whole
+// event stream. Evict the least-recently-committed entries, never the active one.
+const CACHE_MAX = 24;
+function evictCache(keep: string): void {
+  while (eventCache.size > CACHE_MAX) {
+    // Map iterates in insertion order; re-setting on commit doesn't reorder, so the
+    // first key that isn't the active session is the oldest evictable one.
+    let removed = false;
+    for (const k of eventCache.keys()) {
+      if (k !== keep) { eventCache.delete(k); removed = true; break; }
+    }
+    if (!removed) break; // only the active session left
+  }
+}
+
+/** Drop a session's cached stream — call on delete/logout so it doesn't linger. */
+export function dropSessionCache(id: string): void {
+  eventCache.delete(id);
+}
+
+/** Clear all cached streams — call on logout. */
+export function clearSessionCache(): void {
+  eventCache.clear();
+}
+
 function maxSeqOf(msgs: DeckMessage[]): number {
   let m = 0;
   for (const x of msgs) if (typeof x.seq === "number" && x.seq > m) m = x.seq;
@@ -60,6 +86,7 @@ export function useSocket(sessionId: string | null) {
     const commit = () => {
       const snapshot = [...buf];
       eventCache.set(sid, snapshot);
+      evictCache(sid);
       if (!disposed) setMessages(snapshot);
     };
 

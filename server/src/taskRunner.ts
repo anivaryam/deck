@@ -45,6 +45,11 @@ export class TaskRunner {
     }
 
     this.active += 1;
+    // Mark the row active SYNCHRONOUSLY, before the await boundary in send(). The
+    // scheduler's skip-if-active check reads this DB status; without setting it
+    // here the row stays 'idle' until send()'s first await resolves, leaving a
+    // window where a second cron fire sees idle and starts an overlapping run.
+    this.store.setStatus(task.id, 'active');
     // Fire-and-forget: SessionManager records success/error + status itself. We log
     // any failure that escapes that path (e.g. a throw before recording) so it isn't
     // swallowed silently, and always release the concurrency slot.

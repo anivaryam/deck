@@ -26,6 +26,12 @@ describe('TaskRunner', () => {
     const b = r.run({ projectPath: '/p/a', prompt: 'y', origin: 'cron', model: 'claude-opus-4-8' });
     expect(store.get(b)!.model).toBe('claude-opus-4-8');
   });
+  it('marks the session active synchronously, before send() awaits (cron-overlap guard)', () => {
+    // send() never resolves here, so status is only what run() set synchronously.
+    const r = new TaskRunner(store, { send: () => new Promise<void>(() => {}) } as any);
+    const id = r.run({ projectPath: '/p/a', prompt: 'x', origin: 'cron', sourceKind: 'cron', sourceId: 'c1' });
+    expect(store.get(id)!.status).toBe('active');
+  });
   it('swallows manager.send rejection (recorded by manager, not thrown to caller)', async () => {
     const boom = { send: async () => { throw new Error('fail'); } } as any;
     const r2 = new TaskRunner(store, boom);

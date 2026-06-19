@@ -11,7 +11,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useStickToBottom } from "@/hooks/use-stick-to-bottom";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
-import { useSocket } from "@/lib/ws";
+import { useSocket, dropSessionCache, clearSessionCache } from "@/lib/ws";
 import { createIncrementalFolder } from "@/lib/adapt";
 import { hiddenAbove, tailWindow } from "@/lib/window";
 import { EFFORTS, MODELS } from "@/lib/static-data";
@@ -198,6 +198,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       toast.error(`Couldn't delete session: ${err instanceof Error ? err.message : "unknown error"}`);
       return;
     }
+    dropSessionCache(session.id);
     await qc.invalidateQueries({ queryKey: ["sessions"] });
     if (session.id === activeThreadId) navigate({ to: "/" });
     toast.success("Session deleted");
@@ -268,6 +269,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
       /* best-effort: clear client state regardless */
     }
     qc.clear();
+    clearSessionCache();
     navigate({ to: "/login" });
   }
 

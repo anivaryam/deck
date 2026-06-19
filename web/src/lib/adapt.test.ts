@@ -32,6 +32,23 @@ describe("eventsToMessages", () => {
   });
 });
 
+describe("non-array message content (regression)", () => {
+  it("folds a string assistant content into a claude text bubble without throwing", () => {
+    const msgs = eventsToMessages([
+      ev(1, "assistant", { message: { content: "just a string" } }),
+    ]);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].role).toBe("claude");
+    expect(msgs[0].content).toBe("just a string");
+  });
+
+  it("tolerates a string user (tool-result) content without throwing", () => {
+    expect(() =>
+      eventsToMessages([ev(1, "user", { message: { content: "oops" } })]),
+    ).not.toThrow();
+  });
+});
+
 describe("createIncrementalFolder", () => {
   it("matches the full fold when fed one event at a time", () => {
     const fold = createIncrementalFolder();

@@ -150,4 +150,23 @@ describe('POST /api/upload', () => {
       expect(res.statusCode).toBe(400);
     }
   });
+
+  it('replaces spaces in filenames (artifact renderer tokenizes on whitespace)', async () => {
+    const cookieHeader = await login();
+    const projectPath = path.join(root, 'alpha');
+    const sess = store.create({ projectPath });
+
+    const dataBase64 = Buffer.from('x').toString('base64');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/upload',
+      headers: { cookie: cookieHeader },
+      payload: { sessionId: sess.id, filename: 'my notes v2.txt', dataBase64 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.path).toBe('.deck-uploads/my_notes_v2.txt');
+    expect(body.path).not.toContain(' ');
+  });
 });

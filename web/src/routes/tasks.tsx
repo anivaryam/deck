@@ -30,7 +30,7 @@ function TasksRoute() {
 
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
   const rows = useMemo(() => byProjectPath(data ?? [], project), [data, project]);
-  const selected = useMemo(() => (data ?? []).find((t) => t.id === selId) ?? null, [data, selId]);
+  const selected = useMemo(() => rows.find((t) => t.id === selId) ?? null, [rows, selId]);
 
   const projectThreadId = useMemo(() => {
     const chats = (sessions.data ?? []).filter(

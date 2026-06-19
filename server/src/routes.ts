@@ -294,6 +294,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
           return reply.code(400).send({ error: `cron fires too frequently — minimum ${minGap}s between runs` });
         }
       }
+      if (prompt !== undefined && !prompt.trim()) return reply.code(400).send({ error: 'prompt cannot be empty' });
       if (typeof enabled === 'boolean') store.setCronEnabled(req.params.id, enabled);
       if (schedule !== undefined || prompt !== undefined) store.updateCron(req.params.id, { schedule, prompt });
       scheduler.reload();
@@ -308,6 +309,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   app.post<{ Params: { id: string } }>('/api/cron/:id/run', async (req, reply) => {
     const c = store.getCron(req.params.id);
     if (!c) return reply.code(404).send({ error: 'not found' });
+    if (c.enabled !== 1) return reply.code(409).send({ error: 'cron is disabled — enable it first' });
     // Same overlap guard the scheduler applies — don't stack a second run (and its
     // spend) on top of one already in flight. Min-interval is intentionally NOT
     // checked here: a manual fire is an explicit user action.

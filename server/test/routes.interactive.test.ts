@@ -158,6 +158,14 @@ describe('POST /api/cron/:id/run', () => {
     const res = await app.inject({ method: 'POST', url: `/api/cron/${id}/run`, headers: { cookie: c } });
     expect(res.statusCode).toBe(409);
   });
+
+  it('409 when the cron is disabled', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    await app.inject({ method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c }, payload: { enabled: false } });
+    const res = await app.inject({ method: 'POST', url: `/api/cron/${id}/run`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(409);
+  });
 });
 
 describe('PATCH /api/cron/:id (edit schedule/prompt)', () => {
@@ -211,6 +219,16 @@ describe('PATCH /api/cron/:id (edit schedule/prompt)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().enabled).toBe(0);
+  });
+
+  it('rejects an empty prompt with 400', async () => {
+    const c = await login();
+    const id = await createCron(c);
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/cron/${id}`, headers: { cookie: c },
+      payload: { prompt: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 

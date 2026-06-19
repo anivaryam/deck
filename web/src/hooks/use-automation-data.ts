@@ -52,9 +52,10 @@ export function useRunTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.runTicket(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["tickets"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["runs", "ticket", id] });
     },
   });
 }
@@ -97,9 +98,10 @@ export function useRunCron() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.runCron(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["cron"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["runs", "cron", id] });
     },
   });
 }

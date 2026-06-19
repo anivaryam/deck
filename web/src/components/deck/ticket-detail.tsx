@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TicketForm } from "./ticket-form";
 import { StatusChip } from "./status-chip";
 import { useDeleteTicket, useRunTicket, useUpdateTicket } from "@/hooks/use-automation-data";
 import { normalizeTicketStatus, relativeTime } from "@/lib/automation";
@@ -11,12 +13,25 @@ export function TicketDetail({ ticket, onDeleted }: { ticket: Ticket; onDeleted?
   const run = useRunTicket();
   const update = useUpdateTicket();
   const del = useDeleteTicket();
+  const [editing, setEditing] = useState(false);
   const status = normalizeTicketStatus(ticket.status);
 
   const onDelete = () => {
     if (!window.confirm(`Delete ticket "${ticket.title}"? This cannot be undone.`)) return;
     del.mutate(ticket.id, { onSuccess: () => onDeleted?.() });
   };
+
+  if (editing) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="border-b border-border p-4 text-sm font-bold">Edit ticket</div>
+        <TicketForm
+          initial={{ id: ticket.id, title: ticket.title, body: ticket.body ?? "" }}
+          onDone={() => setEditing(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -61,6 +76,16 @@ export function TicketDetail({ ticket, onDeleted }: { ticket: Ticket; onDeleted?
           onClick={() => run.mutate(ticket.id)}
         >
           {run.isPending ? "Starting…" : "▶ Run"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Edit ticket"
+          title="Edit ticket"
+          onClick={() => setEditing(true)}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="size-4" />
         </Button>
         <Button
           variant="ghost"

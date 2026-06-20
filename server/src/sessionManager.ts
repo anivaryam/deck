@@ -166,6 +166,7 @@ export class SessionManager extends EventEmitter {
             this.store,
             sess.project_path,
             sess.source_kind === 'ticket' && sess.source_id ? sess.source_id : undefined,
+            sess.source_kind === 'goal' && sess.source_id ? sess.source_id : undefined,
           ),
         },
       };

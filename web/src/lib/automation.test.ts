@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   normalizeTicketStatus,
   taskStatus,
+  goalStatus,
   statusDotClass,
   statusChipClass,
   relativeTime,
@@ -96,5 +97,15 @@ describe("merged/closed statuses", () => {
   it("has chip + dot classes for the new statuses (no undefined)", () => {
     expect(statusChipClass("merged")).toBeTruthy();
     expect(statusDotClass("closed")).toBeTruthy();
+  });
+});
+
+describe("goalStatus", () => {
+  it("maps goal statuses to automation statuses", () => {
+    expect(goalStatus("queued")).toBe("open");
+    expect(goalStatus("building")).toBe("running");
+    expect(goalStatus("review")).toBe("review");
+    expect(goalStatus("failed")).toBe("failed");
+    expect(goalStatus("cancelled")).toBe("closed");
   });
 });

@@ -16,6 +16,17 @@ export function taskStatus(s: Pick<Session, "status">): AutomationStatus {
   return "done";
 }
 
+/** Map a goal's status onto the shared automation status vocabulary for chips/dots. */
+export function goalStatus(s: string): AutomationStatus {
+  switch (s) {
+    case "building": return "running";
+    case "review": return "review";
+    case "failed": return "failed";
+    case "cancelled": return "closed";
+    default: return "open"; // queued
+  }
+}
+
 /** Status dot: shape + green intensity; destructive (red) only for failure. */
 export function statusDotClass(s: AutomationStatus): string {
   switch (s) {

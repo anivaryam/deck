@@ -148,7 +148,9 @@ export class SessionManager extends EventEmitter {
       // Unattended task/cron runs get a turn ceiling so a stuck/looping agent
       // can't burn tokens unbounded (denial-of-wallet). Interactive sessions are
       // watched by a human, so only cap them if DECK_MAX_TURNS is set explicitly.
-      const maxTurns = sess.kind === 'task' ? (this.cfg.maxTurns ?? 40) : this.cfg.maxTurns;
+      const maxTurns = sess.kind === 'task'
+        ? (sess.source_kind === 'goal' ? (this.cfg.goalMaxTurns ?? 150) : (this.cfg.maxTurns ?? 40))
+        : this.cfg.maxTurns;
       const options: Record<string, unknown> = {
         cwd: sess.cwd || sess.project_path,
         model: sess.model || this.cfg.model,

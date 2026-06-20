@@ -16,6 +16,22 @@ function captureOptions() {
   return { seen, queryFn };
 }
 
+describe('sessionManager goal maxTurns', () => {
+  it('goal sessions get goalMaxTurns (default 150); plain tasks get 40', async () => {
+    const a = captureOptions();
+    const mgrA = new SessionManager(store, cfg, a.queryFn);
+    const goal = store.createTask({ projectPath: '/proj', prompt: 'p', origin: 'goal', sourceKind: 'goal' });
+    await mgrA.send(goal.id, 'go');
+    expect(a.seen.maxTurns).toBe(150);
+
+    const b = captureOptions();
+    const mgrB = new SessionManager(store, cfg, b.queryFn);
+    const task = store.createTask({ projectPath: '/proj', prompt: 'p', origin: 'manual' });
+    await mgrB.send(task.id, 'go');
+    expect(b.seen.maxTurns).toBe(40);
+  });
+});
+
 describe('sessionManager cwd', () => {
   it('uses the session cwd override when set, else project_path', async () => {
     const { seen, queryFn } = captureOptions();

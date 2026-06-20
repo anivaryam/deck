@@ -147,3 +147,29 @@ describe("automation api methods", () => {
     expect(f2.mock.calls[0][1].method).toBe("DELETE");
   });
 });
+
+// The void (no-body) endpoints share the same failure path as the JSON ones via
+// the internal `fail()` helper: on !ok they throw ApiError carrying the server's
+// `{error}` message, falling back to the bare status when the body isn't JSON.
+describe("void-response error path (shared fail helper)", () => {
+  it("deleteGoal() surfaces the body's error message as ApiError", async () => {
+    const f = mockFetch(409, { error: "cancel the goal before deleting it" });
+    vi.stubGlobal("fetch", f);
+    await expect(api.deleteGoal("g1")).rejects.toMatchObject({
+      status: 409,
+      message: "cancel the goal before deleting it",
+    } as ApiError);
+  });
+
+  it("deleteSession() falls back to the status when the error body isn't JSON", async () => {
+    const f = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("not json");
+      },
+    } as unknown as Response);
+    vi.stubGlobal("fetch", f);
+    await expect(api.deleteSession("s1")).rejects.toMatchObject({ status: 500, message: "500" } as ApiError);
+  });
+});

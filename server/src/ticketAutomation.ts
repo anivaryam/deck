@@ -12,9 +12,10 @@ interface TaskFrame {
 const PR_URL = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+/;
 const HUMAN_TERMINAL = new Set(['merged', 'closed']);
 
-/** Drive ticket status from task lifecycle frames. Decoupled from SessionManager. */
-export function registerTicketAutomation(manager: SessionManager, store: Store): void {
-  manager.on('task', (frame: TaskFrame) => {
+/** Drive ticket status from task lifecycle frames. Decoupled from SessionManager.
+ *  Returns a disposer that detaches the listener (used on graceful shutdown). */
+export function registerTicketAutomation(manager: SessionManager, store: Store): () => void {
+  const onTask = (frame: TaskFrame) => {
     try {
       if (frame.source_kind !== 'ticket' || !frame.source_id) return;
       const tk = store.getTicket(frame.source_id);
@@ -51,5 +52,7 @@ export function registerTicketAutomation(manager: SessionManager, store: Store):
     } catch (err) {
       console.error('[ticketAutomation] frame handling failed:', err instanceof Error ? err.message : err);
     }
-  });
+  };
+  manager.on('task', onTask);
+  return () => manager.off('task', onTask);
 }

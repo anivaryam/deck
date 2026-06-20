@@ -24,13 +24,13 @@ async function main() {
   const config = loadConfig(); // throws + exits non-zero if misconfigured
   const store = new Store(process.env.DECK_DB || 'claude-deck.sqlite');
   const manager = new SessionManager(store, config);
-  registerTicketAutomation(manager, store);
+  const disposeTicketAutomation = registerTicketAutomation(manager, store);
   const taskRunner = new TaskRunner(store, manager, 6, { model: config.taskModel, effort: config.taskEffort });
   // Goal worktrees live OUTSIDE any project (never nested in deck or the target
   // repo). Override with DECK_GOALS_DIR. addWorktree() creates this on first use.
   const worktreesDir = process.env.DECK_GOALS_DIR || path.join(os.homedir(), '.deck', 'goal-worktrees');
   const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir);
-  registerGoalAutomation(manager, store, goalExecutor);
+  const disposeGoalAutomation = registerGoalAutomation(manager, store, goalExecutor);
   const scheduler = new Scheduler(store, taskRunner);
   const auth = new AuthSessions(config.sessionTtlMs);
 
@@ -68,6 +68,15 @@ async function main() {
     app.log.info(`received ${sig}, shutting down`);
     try {
       scheduler.stop();
+    } catch (e) {
+      app.log.error(e);
+    }
+    // Detach manager event listeners so the automations + WS hub don't outlive
+    // the server (prevents handler leaks across reinstantiation).
+    try {
+      disposeTicketAutomation();
+      disposeGoalAutomation();
+      ws.dispose();
     } catch (e) {
       app.log.error(e);
     }

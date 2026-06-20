@@ -37,7 +37,7 @@ export function shouldDropFrame(type: unknown, bufferedAmount: number, maxBuffer
   return !(typeof type === 'string' && CRITICAL_FRAME_TYPES.has(type));
 }
 
-export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (sessionId: string) => void } {
+export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (sessionId: string) => void; dispose: () => void } {
   const { store, manager, config, auth } = deps;
   // sessionId -> set of sockets attached to it
   const rooms = new Map<string, Set<WebSocket>>();
@@ -50,17 +50,19 @@ export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (se
   }
 
   // Fan out every manager event to all sockets in that session's room.
-  manager.on('event', (ev: DeckEvent) => {
+  const onEvent = (ev: DeckEvent) => {
     const room = rooms.get(ev.sessionId);
     if (!room) return;
     for (const s of room) send(s, { type: ev.type, payload: ev.payload, at: Date.now(), seq: ev.seq });
-  });
+  };
+  manager.on('event', onEvent);
 
   // Global lifecycle firehose: every task start/finish, lightweight payload only.
   const eventsRoom = new Set<WebSocket>();
-  manager.on('task', (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
+  const onTask = (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
     for (const s of eventsRoom) send(s, { type: 'task', payload: frame, at: Date.now() });
-  });
+  };
+  manager.on('task', onTask);
 
   app.get('/ws/events', { websocket: true }, (socket, req) => {
     const origin = req.headers.origin;
@@ -175,5 +177,12 @@ export function registerWs(app: FastifyInstance, deps: WsDeps): { closeRoom: (se
     rooms.delete(sessionId);
   }
 
-  return { closeRoom };
+  // Detach the manager listeners. Used on graceful shutdown so the hub doesn't
+  // outlive the server (and so tests can dispose a hub without leaking handlers).
+  function dispose(): void {
+    manager.off('event', onEvent);
+    manager.off('task', onTask);
+  }
+
+  return { closeRoom, dispose };
 }

@@ -7,6 +7,18 @@ export interface GoalExecutor {
   start(goalId: string): void;
 }
 
+/** Remove a goal's worktree, logging on failure instead of swallowing. A failed
+ *  cleanup leaks a worktree dir + registration on disk; the silent variant hid
+ *  the only signal that it happened. The caller still proceeds (cleanup is
+ *  best-effort), but the warning makes an orphaned worktree diagnosable. */
+function tryRemoveWorktree(repo: string, worktreePath: string): void {
+  try {
+    removeWorktree(repo, worktreePath);
+  } catch (err) {
+    console.warn(`[goalRunner] worktree cleanup failed for ${worktreePath}:`, err instanceof Error ? err.message : err);
+  }
+}
+
 /** Minimal interface the executor needs from any task runner. */
 interface RunnerLike {
   run(input: {
@@ -112,7 +124,7 @@ export class SinglePassExecutor implements GoalExecutor {
         sourceId: goalId,
       });
     } catch (e) {
-      try { removeWorktree(g.project_path, worktreePath); } catch { /* best-effort */ }
+      tryRemoveWorktree(g.project_path, worktreePath);
       this.store.updateGoal(goalId, { status: 'failed', worktree_path: null, report: JSON.stringify({ error: `failed to start run: ${e instanceof Error ? e.message : e}` }) });
       return;
     }
@@ -141,7 +153,7 @@ export class SinglePassExecutor implements GoalExecutor {
         sourceId: goalId,
       });
     } catch (e) {
-      try { removeWorktree(g.project_path, g.worktree_path); } catch { /* best-effort */ }
+      tryRemoveWorktree(g.project_path, g.worktree_path);
       this.store.updateGoal(goalId, { status: 'review', worktree_path: null, verdict: JSON.stringify({ achieved: false, reasons: `failed to start verification: ${e instanceof Error ? e.message : e}`, unmet_criteria: [], tests_summary: '' }) });
       return;
     }
@@ -149,13 +161,14 @@ export class SinglePassExecutor implements GoalExecutor {
   }
 }
 
-/** Drive goal status from task lifecycle frames + clean up the worktree. */
+/** Drive goal status from task lifecycle frames + clean up the worktree.
+ *  Returns a disposer that detaches the listener (used on graceful shutdown). */
 export function registerGoalAutomation(
-  manager: Pick<SessionManager, 'on'>,
+  manager: Pick<SessionManager, 'on' | 'off'>,
   store: Store,
   verifier: { start(goalId: string): void; startVerification(goalId: string): void },
-): void {
-  manager.on('task', (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
+): () => void {
+  const onTask = (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
     try {
       const kind = frame.source_kind;
       if ((kind !== 'goal' && kind !== 'goal_verify') || !frame.source_id) return;
@@ -165,7 +178,7 @@ export function registerGoalAutomation(
 
       const cleanup = () => {
         if (g.worktree_path) {
-          try { removeWorktree(g.project_path, g.worktree_path); } catch { /* best-effort */ }
+          tryRemoveWorktree(g.project_path, g.worktree_path);
           store.updateGoal(g.id, { worktree_path: null });
         }
       };
@@ -198,5 +211,7 @@ export function registerGoalAutomation(
     } catch (err) {
       console.error('[goalAutomation] frame handling failed:', err instanceof Error ? err.message : err);
     }
-  });
+  };
+  manager.on('task', onTask);
+  return () => manager.off('task', onTask);
 }

@@ -12,18 +12,28 @@ export class ApiError extends Error {
   }
 }
 
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let msg = `${res.status}`;
-    try {
-      const b = await res.json();
-      if (b?.error) msg = b.error;
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(res.status, msg);
+/** Throw an ApiError carrying the server's `{error}` message when present,
+ *  falling back to the bare status. Single source of truth for the failure path
+ *  shared by both the JSON and void (no-body) response helpers. */
+async function fail(res: Response): Promise<never> {
+  let msg = `${res.status}`;
+  try {
+    const b = await res.json();
+    if (b?.error) msg = b.error;
+  } catch {
+    /* ignore */
   }
+  throw new ApiError(res.status, msg);
+}
+
+async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) await fail(res);
   return res.json() as Promise<T>;
+}
+
+/** Assert a response is ok for endpoints that return no body (e.g. DELETE). */
+async function ok(res: Response): Promise<void> {
+  if (!res.ok) await fail(res);
 }
 
 export const api = {
@@ -59,20 +69,7 @@ export const api = {
     return json(await fetch(`/api/sessions/${id}`, { credentials: "same-origin" }));
   },
   async deleteSession(id: string): Promise<void> {
-    const res = await fetch(`/api/sessions/${id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      let msg = `${res.status}`;
-      try {
-        const b = await res.json();
-        if (b?.error) msg = b.error;
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(res.status, msg);
-    }
+    return ok(await fetch(`/api/sessions/${id}`, { method: "DELETE", credentials: "same-origin" }));
   },
   async createSession(
     project: string,
@@ -145,20 +142,7 @@ export const api = {
     );
   },
   async deleteTask(id: string): Promise<void> {
-    const res = await fetch(`/api/tasks/${id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      let msg = `${res.status}`;
-      try {
-        const b = await res.json();
-        if (b?.error) msg = b.error;
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(res.status, msg);
-    }
+    return ok(await fetch(`/api/tasks/${id}`, { method: "DELETE", credentials: "same-origin" }));
   },
 
   // ---- runs ----
@@ -207,20 +191,7 @@ export const api = {
     );
   },
   async deleteCron(id: string): Promise<void> {
-    const res = await fetch(`/api/cron/${id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      let msg = `${res.status}`;
-      try {
-        const b = await res.json();
-        if (b?.error) msg = b.error;
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(res.status, msg);
-    }
+    return ok(await fetch(`/api/cron/${id}`, { method: "DELETE", credentials: "same-origin" }));
   },
 
   // ---- tickets (no GET :id route — detail comes from the list) ----
@@ -263,20 +234,7 @@ export const api = {
     );
   },
   async deleteTicket(id: string): Promise<void> {
-    const res = await fetch(`/api/tickets/${id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      let msg = `${res.status}`;
-      try {
-        const b = await res.json();
-        if (b?.error) msg = b.error;
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(res.status, msg);
-    }
+    return ok(await fetch(`/api/tickets/${id}`, { method: "DELETE", credentials: "same-origin" }));
   },
 
   // ---- goals ----
@@ -303,11 +261,6 @@ export const api = {
     return json(await fetch(`/api/goals/${id}/cancel`, { method: "POST", credentials: "same-origin" }));
   },
   async deleteGoal(id: string): Promise<void> {
-    const res = await fetch(`/api/goals/${id}`, { method: "DELETE", credentials: "same-origin" });
-    if (!res.ok) {
-      let msg = `${res.status}`;
-      try { const b = await res.json(); if (b?.error) msg = b.error; } catch { /* ignore */ }
-      throw new ApiError(res.status, msg);
-    }
+    return ok(await fetch(`/api/goals/${id}`, { method: "DELETE", credentials: "same-origin" }));
   },
 };

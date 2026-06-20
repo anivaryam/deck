@@ -286,7 +286,7 @@ export const api = {
   async goal(id: string): Promise<GoalDetail> {
     return json(await fetch(`/api/goals/${id}`, { credentials: "same-origin" }));
   },
-  async createGoal(body: { project: string; title: string; expected_output: string; acceptance?: string; max_iterations?: number }): Promise<Goal> {
+  async createGoal(body: { project: string; title: string; expected_output: string; acceptance?: string; max_iterations?: number; qa_dimensions?: string[] }): Promise<Goal> {
     return json(
       await fetch("/api/goals", {
         method: "POST",

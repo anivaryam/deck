@@ -6,6 +6,17 @@ export function GoalVerdictView({ verdict }: { verdict: GoalVerdict }) {
       <div className={verdict.achieved ? "font-medium text-primary" : "font-medium text-destructive"}>
         {verdict.achieved ? "✓ verified achieved" : "✗ not achieved"}
       </div>
+      {verdict.dimensions && verdict.dimensions.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {verdict.dimensions.map((d, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className={d.passed ? "text-primary" : "text-destructive"}>{d.passed ? "✓" : "✗"}</span>
+              <span className="capitalize text-foreground">{d.name}</span>
+              {d.notes && <span className="text-muted-foreground">— {d.notes}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{verdict.reasons}</p>
       {verdict.unmet_criteria?.length > 0 && (
         <div>

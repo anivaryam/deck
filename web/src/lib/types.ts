@@ -128,6 +128,7 @@ export interface GoalVerdict {
   reasons: string;
   unmet_criteria: string[];
   tests_summary: string;
+  dimensions?: { name: string; passed: boolean; notes: string }[];
 }
 
 export interface Goal {
@@ -144,6 +145,7 @@ export interface Goal {
   verdict: string | null;
   max_iterations: number;
   iteration: number;
+  qa_dimensions: string;
   created_at: number;
 }
 

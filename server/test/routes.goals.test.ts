@@ -105,4 +105,19 @@ describe('goal routes', () => {
     store.updateGoal(id, { status: 'verifying' });
     expect((await app.inject({ method: 'POST', url: `/api/goals/${id}/run`, headers: { cookie: c } })).statusCode).toBe(409);
   });
+
+  it('POST /api/goals stores max_iterations from the body', async () => {
+    const c = await login();
+    const r = await app.inject({ method: 'POST', url: '/api/goals', headers: { cookie: c }, payload: { project: 'alpha', title: 'T', expected_output: 'x', max_iterations: 4 } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().max_iterations).toBe(4);
+  });
+
+  it('POST /run resets iteration to 0', async () => {
+    const c = await login();
+    const id = (await create(c)).json().id;
+    store.updateGoal(id, { iteration: 2 });
+    await app.inject({ method: 'POST', url: `/api/goals/${id}/run`, headers: { cookie: c } });
+    expect(store.getGoal(id)!.iteration).toBe(0);
+  });
 });

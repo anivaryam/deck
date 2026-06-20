@@ -89,3 +89,11 @@ describe('goalMaxTurns', () => {
     expect(loadConfig({ ...base, DECK_GOAL_MAX_TURNS: '50' } as any).goalMaxTurns).toBe(50);
   });
 });
+
+describe('goalMaxIterations', () => {
+  it('defaults to 3 and reads DECK_GOAL_MAX_ITERATIONS', () => {
+    const base = { DECK_TOKEN: 'a-long-test-token-value-1234', ANTHROPIC_API_KEY: 'k' };
+    expect(loadConfig({ ...base } as any).goalMaxIterations).toBe(3);
+    expect(loadConfig({ ...base, DECK_GOAL_MAX_ITERATIONS: '7' } as any).goalMaxIterations).toBe(7);
+  });
+});

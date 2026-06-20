@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import os from 'node:os';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
@@ -25,8 +26,9 @@ async function main() {
   const manager = new SessionManager(store, config);
   registerTicketAutomation(manager, store);
   const taskRunner = new TaskRunner(store, manager, 6, { model: config.taskModel, effort: config.taskEffort });
-  const dbPath = process.env.DECK_DB || 'claude-deck.sqlite';
-  const worktreesDir = process.env.DECK_GOALS_DIR || path.join(path.dirname(path.resolve(dbPath)), 'deck-goal-worktrees');
+  // Goal worktrees live OUTSIDE any project (never nested in deck or the target
+  // repo). Override with DECK_GOALS_DIR. addWorktree() creates this on first use.
+  const worktreesDir = process.env.DECK_GOALS_DIR || path.join(os.homedir(), '.deck', 'goal-worktrees');
   const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir);
   registerGoalAutomation(manager, store, goalExecutor);
   const scheduler = new Scheduler(store, taskRunner);

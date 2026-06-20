@@ -145,8 +145,8 @@ describe('verification gate', () => {
     expect(fs.existsSync(wt)).toBe(false);
   });
 
-  it('verify terminal with not-achieved verdict → review', () => {
-    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+  it('verify terminal with not-achieved verdict → review (at cap)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 1 });
     const exec = new SinglePassExecutor(store, taskRunner, wtBase);
     registerGoalAutomation(manager, store, exec);
     exec.start(g.id);
@@ -157,8 +157,8 @@ describe('verification gate', () => {
     expect(store.getGoal(g.id)!.status).toBe('review');
   });
 
-  it('verify terminal with no verdict → review (inconclusive)', () => {
-    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+  it('verify terminal with no verdict → review (inconclusive, at cap)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 1 });
     const exec = new SinglePassExecutor(store, taskRunner, wtBase);
     registerGoalAutomation(manager, store, exec);
     exec.start(g.id);
@@ -176,5 +176,56 @@ describe('verification gate', () => {
     manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal', source_id: g.id, status: 'errored', result: 'error' });
     expect(store.getGoal(g.id)!.status).toBe('failed');
     expect(runs.some((r) => r.sourceKind === 'goal_verify')).toBe(false);
+  });
+});
+
+describe('autonomous loop', () => {
+  function buildSuccessFrame(id: string, gid: string) {
+    return { id, source_kind: 'goal', source_id: gid, status: 'idle', result: 'success' };
+  }
+
+  it('not-achieved with attempts remaining → iteration++ and a fresh build is launched', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 3 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id); // attempt 0 (iteration 0)
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', buildSuccessFrame(store.getGoal(g.id)!.session_id!, g.id)); // → verifying
+    store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: false, reasons: 'tests fail', unmet_criteria: ['x'], tests_summary: 'fail' }) });
+    const buildCountBefore = runs.filter((r) => r.sourceKind === 'goal').length;
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
+    // retry: iteration incremented, a new goal build launched, status building again
+    expect(store.getGoal(g.id)!.iteration).toBe(1);
+    expect(store.getGoal(g.id)!.status).toBe('building');
+    expect(runs.filter((r) => r.sourceKind === 'goal').length).toBe(buildCountBefore + 1);
+    // the retry build prompt mentions the prior failure
+    const lastBuild = runs.filter((r) => r.sourceKind === 'goal').at(-1);
+    expect(lastBuild.prompt).toMatch(/attempt 2|previous attempt|tests fail/i);
+  });
+
+  it('not-achieved at the cap → review (no new build)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 1 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', buildSuccessFrame(store.getGoal(g.id)!.session_id!, g.id));
+    store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: false, reasons: 'no', unmet_criteria: [], tests_summary: '' }) });
+    const buildCountBefore = runs.filter((r) => r.sourceKind === 'goal').length;
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
+    expect(store.getGoal(g.id)!.status).toBe('review');
+    expect(runs.filter((r) => r.sourceKind === 'goal').length).toBe(buildCountBefore); // no retry
+  });
+
+  it('achieved → achieved (loop stops)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 3 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', buildSuccessFrame(store.getGoal(g.id)!.session_id!, g.id));
+    store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: true, reasons: 'ok', unmet_criteria: [], tests_summary: 'pass' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
+    expect(store.getGoal(g.id)!.status).toBe('achieved');
   });
 });

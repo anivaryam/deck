@@ -72,11 +72,12 @@ export interface GoalRow {
   title: string;
   expected_output: string;
   acceptance: string | null;
-  status: 'queued' | 'building' | 'review' | 'failed' | 'cancelled';
+  status: 'queued' | 'building' | 'verifying' | 'achieved' | 'review' | 'failed' | 'cancelled';
   branch: string | null;
   worktree_path: string | null;
   session_id: string | null;
   report: string | null;
+  verdict: string | null;
   created_at: number;
 }
 
@@ -219,11 +220,16 @@ export class Store {
         id TEXT PRIMARY KEY, project_path TEXT NOT NULL, title TEXT NOT NULL,
         expected_output TEXT NOT NULL, acceptance TEXT,
         status TEXT NOT NULL DEFAULT 'queued',
-        branch TEXT, worktree_path TEXT, session_id TEXT, report TEXT,
+        branch TEXT, worktree_path TEXT, session_id TEXT, report TEXT, verdict TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_goal_project ON goal(project_path);
     `);
+    // Additive: goal.verdict was added in Slice 2; ALTER for DBs created before it.
+    const goalCols = new Set(
+      (this.db.prepare(`PRAGMA table_info(goal)`).all() as Array<{ name: string }>).map((c) => c.name),
+    );
+    if (!goalCols.has('verdict')) this.db.exec(`ALTER TABLE goal ADD COLUMN verdict TEXT`);
   }
 
   private prepareStatements(): void {
@@ -340,7 +346,7 @@ export class Store {
     model?: string;
     effort?: string;
     disabledTools?: string[];
-    sourceKind?: 'cron' | 'ticket' | 'goal';
+    sourceKind?: 'cron' | 'ticket' | 'goal' | 'goal_verify';
     sourceId?: string;
     cwd?: string;
   }): SessionRow {
@@ -367,7 +373,7 @@ export class Store {
     this.stmts.finishRun.run(Date.now(), result, id);
   }
 
-  listRunsForSource(sourceKind: 'cron' | 'ticket' | 'goal', sourceId: string, limit = 20): SessionRow[] {
+  listRunsForSource(sourceKind: 'cron' | 'ticket' | 'goal' | 'goal_verify', sourceId: string, limit = 20): SessionRow[] {
     return this.stmts.listRunsForSource.all(sourceKind, sourceId, limit) as SessionRow[];
   }
 
@@ -530,11 +536,11 @@ export class Store {
 
   updateGoal(
     id: string,
-    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report'>>,
+    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report' | 'verdict'>>,
   ): void {
     const sets: string[] = [];
     const vals: unknown[] = [];
-    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report'] as const) {
+    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report', 'verdict'] as const) {
       if (p[k] !== undefined) {
         sets.push(`${k} = ?`);
         vals.push(p[k]);

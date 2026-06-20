@@ -38,4 +38,14 @@ describe('Store goals', () => {
     store.deleteGoal(g.id);
     expect(store.getGoal(g.id)).toBeUndefined();
   });
+
+  it('persists a verdict and the new statuses', () => {
+    const g = store.createGoal({ projectPath: '/p/a', title: 'A', expectedOutput: 'x' });
+    store.updateGoal(g.id, { status: 'verifying' });
+    expect(store.getGoal(g.id)!.status).toBe('verifying');
+    store.updateGoal(g.id, { status: 'achieved', verdict: JSON.stringify({ achieved: true, reasons: 'ok' }) });
+    const got = store.getGoal(g.id)!;
+    expect(got.status).toBe('achieved');
+    expect(JSON.parse(got.verdict!).achieved).toBe(true);
+  });
 });

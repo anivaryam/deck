@@ -134,7 +134,7 @@ export function useGoals() {
   return useQuery({
     queryKey: ["goals"],
     queryFn: () => api.goals(),
-    refetchInterval: (q) => (q.state.data?.some((g) => g.status === "building") ? 3000 : false),
+    refetchInterval: (q) => (q.state.data?.some((g) => g.status === "building" || g.status === "verifying") ? 3000 : false),
   });
 }
 
@@ -143,7 +143,10 @@ export function useGoal(id: string | null) {
     queryKey: ["goals", id],
     queryFn: () => (id ? api.goal(id) : Promise.resolve(null)),
     enabled: !!id,
-    refetchInterval: (q) => (q.state.data?.status === "building" ? 3000 : false),
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      return s === "building" || s === "verifying" ? 3000 : false;
+    },
   });
 }
 

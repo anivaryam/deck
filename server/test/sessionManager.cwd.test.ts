@@ -47,3 +47,15 @@ describe('sessionManager cwd', () => {
     expect(seen2.seen.cwd).toBe('/proj');
   });
 });
+
+describe('sessionManager goal_verify session', () => {
+  it('exposes the deck mcp server for a goal_verify session and gives it goalMaxTurns', async () => {
+    const a = captureOptions();
+    const mgr = new SessionManager(store, cfg, a.queryFn);
+    const v = store.createTask({ projectPath: '/proj', prompt: 'p', origin: 'goal', sourceKind: 'goal_verify', cwd: '/proj/wt' });
+    await mgr.send(v.id, 'go');
+    expect(a.seen.maxTurns).toBe(150);
+    expect(a.seen.cwd).toBe('/proj/wt');
+    expect(a.seen.mcpServers?.deck).toBeDefined();
+  });
+});

@@ -91,4 +91,18 @@ describe('goal routes', () => {
     const r = await app.inject({ method: 'POST', url: '/api/goals', headers: { cookie: c }, payload: { project: 'alpha', title: '   ', expected_output: '   ' } });
     expect(r.statusCode).toBe(400);
   });
+
+  it('DELETE 409s while verifying', async () => {
+    const c = await login();
+    const id = (await create(c)).json().id;
+    store.updateGoal(id, { status: 'verifying' });
+    expect((await app.inject({ method: 'DELETE', url: `/api/goals/${id}`, headers: { cookie: c } })).statusCode).toBe(409);
+  });
+
+  it('POST /run 409s while verifying', async () => {
+    const c = await login();
+    const id = (await create(c)).json().id;
+    store.updateGoal(id, { status: 'verifying' });
+    expect((await app.inject({ method: 'POST', url: `/api/goals/${id}/run`, headers: { cookie: c } })).statusCode).toBe(409);
+  });
 });

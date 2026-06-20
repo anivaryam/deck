@@ -108,4 +108,8 @@ describe("goalStatus", () => {
     expect(goalStatus("failed")).toBe("failed");
     expect(goalStatus("cancelled")).toBe("closed");
   });
+  it("maps verifying and achieved", () => {
+    expect(goalStatus("verifying")).toBe("running");
+    expect(goalStatus("achieved")).toBe("merged");
+  });
 });

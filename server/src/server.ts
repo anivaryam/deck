@@ -28,7 +28,7 @@ async function main() {
   const dbPath = process.env.DECK_DB || 'claude-deck.sqlite';
   const worktreesDir = process.env.DECK_GOALS_DIR || path.join(path.dirname(path.resolve(dbPath)), 'deck-goal-worktrees');
   const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir);
-  registerGoalAutomation(manager, store);
+  registerGoalAutomation(manager, store, goalExecutor);
   const scheduler = new Scheduler(store, taskRunner);
   const auth = new AuthSessions(config.sessionTtlMs);
 

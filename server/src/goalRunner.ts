@@ -15,7 +15,7 @@ interface RunnerLike {
     prompt: string;
     origin: 'goal';
     title?: string | null;
-    sourceKind: 'goal';
+    sourceKind: 'goal' | 'goal_verify';
     sourceId: string;
   }): string;
 }
@@ -28,6 +28,17 @@ function goalPrompt(goalId: string, expected: string, acceptance: string | null)
     `Acceptance criteria: ${acceptance && acceptance.trim() ? acceptance : 'none stated'}`,
     '',
     "Plan first, then implement in focused changes, then run the project's tests and confirm they pass. Use your available skills and subagents as appropriate. When finished — or if blocked — call the `goal_report` tool with an honest structured outcome: summarize what you built, list files changed and the commands/tests you ran with their results, and list anything still incomplete. Report incomplete items truthfully rather than claiming false success.",
+  ].join('\n');
+}
+
+function verifyPrompt(goalId: string, expected: string, acceptance: string | null): string {
+  return [
+    `A previous agent attempted to achieve the goal below on the CURRENT branch (\`goal/${goalId}\`). Independently and SKEPTICALLY verify whether the goal is genuinely met. Do NOT trust the prior agent's claims. Review the changes (\`git diff\`), run the project's tests yourself, and check each acceptance criterion.`,
+    '',
+    `Goal (expected output): ${expected}`,
+    `Acceptance criteria: ${acceptance && acceptance.trim() ? acceptance : 'verify the changes fully satisfy the expected output above'}`,
+    '',
+    'Be strict: a goal is achieved ONLY if the tests pass and every acceptance criterion is genuinely satisfied. If there are no tests, say so in tests_summary and base the verdict on the criteria plus your own inspection. When done, call the `goal_verdict` tool with your honest structured verdict.',
   ].join('\n');
 }
 
@@ -55,7 +66,7 @@ export class SinglePassExecutor implements GoalExecutor {
       this.store.updateGoal(goalId, { status: 'failed', report: JSON.stringify({ error: `worktree setup failed: ${e instanceof Error ? e.message : e}` }) });
       return;
     }
-    this.store.updateGoal(goalId, { status: 'building', branch, worktree_path: worktreePath });
+    this.store.updateGoal(goalId, { status: 'building', branch, worktree_path: worktreePath, verdict: null, report: null });
     let sessionId: string;
     try {
       sessionId = this.runner.run({
@@ -74,25 +85,72 @@ export class SinglePassExecutor implements GoalExecutor {
     }
     this.store.updateGoal(goalId, { session_id: sessionId });
   }
+
+  /** Launch the adversarial verifier in the goal's existing worktree. */
+  startVerification(goalId: string): void {
+    const g = this.store.getGoal(goalId);
+    if (!g) return;
+    if (!g.worktree_path) {
+      this.store.updateGoal(goalId, { status: 'review' });
+      return;
+    }
+    let sessionId: string;
+    try {
+      sessionId = this.runner.run({
+        projectPath: g.project_path,
+        cwd: g.worktree_path,
+        prompt: verifyPrompt(goalId, g.expected_output, g.acceptance),
+        origin: 'goal',
+        title: g.title,
+        sourceKind: 'goal_verify',
+        sourceId: goalId,
+      });
+    } catch (e) {
+      try { removeWorktree(g.project_path, g.worktree_path); } catch { /* best-effort */ }
+      this.store.updateGoal(goalId, { status: 'review', worktree_path: null, verdict: JSON.stringify({ achieved: false, reasons: `failed to start verification: ${e instanceof Error ? e.message : e}`, unmet_criteria: [], tests_summary: '' }) });
+      return;
+    }
+    this.store.updateGoal(goalId, { session_id: sessionId });
+  }
 }
 
 /** Drive goal status from task lifecycle frames + clean up the worktree. */
-export function registerGoalAutomation(manager: Pick<SessionManager, 'on'>, store: Store): void {
+export function registerGoalAutomation(
+  manager: Pick<SessionManager, 'on'>,
+  store: Store,
+  verifier: { startVerification(goalId: string): void },
+): void {
   manager.on('task', (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
     try {
-      if (frame.source_kind !== 'goal' || !frame.source_id) return;
+      const kind = frame.source_kind;
+      if ((kind !== 'goal' && kind !== 'goal_verify') || !frame.source_id) return;
       const g = store.getGoal(frame.source_id);
       if (!g) return;
-      if (frame.status === 'active') return; // building already set by the executor
-      let status: 'review' | 'failed' | 'cancelled';
-      if (frame.result === 'cancelled') status = 'cancelled';
-      else if (frame.result === 'success' && g.report) status = 'review';
-      else status = 'failed';
-      store.updateGoal(g.id, { status });
-      if (g.worktree_path) {
-        try { removeWorktree(g.project_path, g.worktree_path); } catch { /* best-effort */ }
-        store.updateGoal(g.id, { worktree_path: null });
+      if (frame.status === 'active') return;
+
+      const cleanup = () => {
+        if (g.worktree_path) {
+          try { removeWorktree(g.project_path, g.worktree_path); } catch { /* best-effort */ }
+          store.updateGoal(g.id, { worktree_path: null });
+        }
+      };
+
+      if (kind === 'goal') {
+        if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
+        if (frame.result === 'success' && g.report) {
+          store.updateGoal(g.id, { status: 'verifying' });
+          verifier.startVerification(g.id);
+          return;
+        }
+        store.updateGoal(g.id, { status: 'failed' }); cleanup(); return;
       }
+
+      // kind === 'goal_verify'
+      if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
+      let verdict: { achieved?: boolean } | null = null;
+      try { verdict = g.verdict ? JSON.parse(g.verdict) : null; } catch { verdict = null; }
+      store.updateGoal(g.id, { status: verdict?.achieved === true ? 'achieved' : 'review' });
+      cleanup();
     } catch (err) {
       console.error('[goalAutomation] frame handling failed:', err instanceof Error ? err.message : err);
     }

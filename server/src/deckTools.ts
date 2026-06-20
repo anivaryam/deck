@@ -45,17 +45,32 @@ export async function goalReportHandler(
   return { content: [{ type: 'text', text: `Report recorded for goal ${goalId}.` }] };
 }
 
+export interface GoalVerdictArgs {
+  achieved: boolean;
+  reasons: string;
+  unmet_criteria: string[];
+  tests_summary: string;
+}
+
+export async function goalVerdictHandler(
+  store: Store, goalId: string, args: GoalVerdictArgs,
+): Promise<ToolResult> {
+  store.updateGoal(goalId, { verdict: JSON.stringify(args) });
+  return { content: [{ type: 'text', text: `Verdict recorded for goal ${goalId} (achieved=${args.achieved}).` }] };
+}
+
 /** Returns the list of tool names registered for the given context.
  *  Pure helper — usable in tests without constructing an MCP server. */
-export function deckToolNames(ticketId?: string, goalId?: string): string[] {
+export function deckToolNames(ticketId?: string, goalId?: string, verifyGoalId?: string): string[] {
   const names = ['create_ticket', 'list_tickets'];
   if (ticketId) names.push('link_pr');
   if (goalId) names.push('goal_report');
+  if (verifyGoalId) names.push('goal_verdict');
   return names;
 }
 
 /** In-process MCP server ("deck"), tools bound to one project. */
-export function buildDeckMcp(store: Store, projectPath: string, ticketId?: string, goalId?: string) {
+export function buildDeckMcp(store: Store, projectPath: string, ticketId?: string, goalId?: string, verifyGoalId?: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: SdkMcpToolDefinition<any>[] = [
     tool(
@@ -97,6 +112,21 @@ export function buildDeckMcp(store: Store, projectPath: string, ticketId?: strin
           notes: z.string().optional(),
         },
         async (args) => goalReportHandler(store, goalId, args as GoalReportArgs),
+      ),
+    );
+  }
+  if (verifyGoalId) {
+    tools.push(
+      tool(
+        'goal_verdict',
+        'Record the FINAL verification verdict for the current goal. Call this exactly once after verifying.',
+        {
+          achieved: z.boolean().describe('Does the result genuinely meet the goal (tests pass + acceptance met)?'),
+          reasons: z.string().describe('Why achieved / why not'),
+          unmet_criteria: z.array(z.string()).describe('Acceptance criteria not satisfied (empty if achieved)'),
+          tests_summary: z.string().describe('What tests you ran and their result'),
+        },
+        async (args) => goalVerdictHandler(store, verifyGoalId, args as GoalVerdictArgs),
       ),
     );
   }

@@ -149,7 +149,7 @@ export class SessionManager extends EventEmitter {
       // can't burn tokens unbounded (denial-of-wallet). Interactive sessions are
       // watched by a human, so only cap them if DECK_MAX_TURNS is set explicitly.
       const maxTurns = sess.kind === 'task'
-        ? (sess.source_kind === 'goal' ? (this.cfg.goalMaxTurns ?? 150) : (this.cfg.maxTurns ?? 40))
+        ? ((sess.source_kind === 'goal' || sess.source_kind === 'goal_verify') ? (this.cfg.goalMaxTurns ?? 150) : (this.cfg.maxTurns ?? 40))
         : this.cfg.maxTurns;
       const options: Record<string, unknown> = {
         cwd: sess.cwd || sess.project_path,
@@ -169,6 +169,7 @@ export class SessionManager extends EventEmitter {
             sess.project_path,
             sess.source_kind === 'ticket' && sess.source_id ? sess.source_id : undefined,
             sess.source_kind === 'goal' && sess.source_id ? sess.source_id : undefined,
+            sess.source_kind === 'goal_verify' && sess.source_id ? sess.source_id : undefined,
           ),
         },
       };

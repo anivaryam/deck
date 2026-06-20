@@ -336,7 +336,7 @@ export class Store {
     projectPath: string;
     prompt: string;
     origin: SessionOrigin;
-    title?: string;
+    title?: string | null;
     model?: string;
     effort?: string;
     disabledTools?: string[];

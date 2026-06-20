@@ -112,3 +112,31 @@ export interface Cron {
 export interface TaskDetail extends Session {
   events: DeckMessage[];
 }
+
+export interface GoalReport {
+  summary: string;
+  goal_met: boolean;
+  files_changed: string[];
+  commands_run: { cmd: string; exit_code: number; output_tail: string }[];
+  incomplete: string[];
+  notes?: string;
+  error?: string;
+}
+
+export interface Goal {
+  id: string;
+  project_path: string;
+  title: string;
+  expected_output: string;
+  acceptance: string | null;
+  status: "queued" | "building" | "review" | "failed" | "cancelled";
+  branch: string | null;
+  worktree_path: string | null;
+  session_id: string | null;
+  report: string | null;
+  created_at: number;
+}
+
+export interface GoalDetail extends Goal {
+  events: DeckMessage[];
+}

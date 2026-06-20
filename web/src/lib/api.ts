@@ -1,4 +1,4 @@
-import type { Cron, Project, Session, Ticket, TaskDetail } from "./types";
+import type { Cron, Goal, GoalDetail, Project, Session, Ticket, TaskDetail } from "./types";
 
 /** Error carrying the HTTP status so callers can branch on it (e.g. 401 → login)
  *  instead of regex-matching the message. */
@@ -275,6 +275,38 @@ export const api = {
       } catch {
         /* ignore */
       }
+      throw new ApiError(res.status, msg);
+    }
+  },
+
+  // ---- goals ----
+  async goals(): Promise<Goal[]> {
+    return json(await fetch("/api/goals", { credentials: "same-origin" }));
+  },
+  async goal(id: string): Promise<GoalDetail> {
+    return json(await fetch(`/api/goals/${id}`, { credentials: "same-origin" }));
+  },
+  async createGoal(body: { project: string; title: string; expected_output: string; acceptance?: string }): Promise<Goal> {
+    return json(
+      await fetch("/api/goals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "same-origin",
+      }),
+    );
+  },
+  async runGoal(id: string): Promise<Goal> {
+    return json(await fetch(`/api/goals/${id}/run`, { method: "POST", credentials: "same-origin" }));
+  },
+  async cancelGoal(id: string): Promise<{ cancelled: boolean }> {
+    return json(await fetch(`/api/goals/${id}/cancel`, { method: "POST", credentials: "same-origin" }));
+  },
+  async deleteGoal(id: string): Promise<void> {
+    const res = await fetch(`/api/goals/${id}`, { method: "DELETE", credentials: "same-origin" });
+    if (!res.ok) {
+      let msg = `${res.status}`;
+      try { const b = await res.json(); if (b?.error) msg = b.error; } catch { /* ignore */ }
       throw new ApiError(res.status, msg);
     }
   },

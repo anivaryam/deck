@@ -116,4 +116,34 @@ describe("automation api methods", () => {
     const out = await api.createTask({ project: "deck", prompt: "go" });
     expect(out).toEqual({ id: "task1" });
   });
+
+  it("createGoal() POSTs the goal fields", async () => {
+    const f = mockFetch(200, { id: "g1", status: "queued" });
+    vi.stubGlobal("fetch", f);
+    await api.createGoal({ project: "deck", title: "T", expected_output: "x", acceptance: "y" });
+    const [url, init] = f.mock.calls[0];
+    expect(url).toBe("/api/goals");
+    expect(JSON.parse(init.body)).toEqual({ project: "deck", title: "T", expected_output: "x", acceptance: "y" });
+  });
+
+  it("runGoal() POSTs to the run subroute; goals() GETs the list", async () => {
+    const f = mockFetch(200, { id: "g1", status: "building" });
+    vi.stubGlobal("fetch", f);
+    await api.runGoal("g1");
+    expect(f.mock.calls[0][0]).toBe("/api/goals/g1/run");
+    const f2 = mockFetch(200, [{ id: "g1" }]);
+    vi.stubGlobal("fetch", f2);
+    expect(await api.goals()).toEqual([{ id: "g1" }]);
+  });
+
+  it("cancelGoal() POSTs cancel; deleteGoal() DELETEs", async () => {
+    const f = mockFetch(200, { cancelled: true });
+    vi.stubGlobal("fetch", f);
+    await api.cancelGoal("g1");
+    expect(f.mock.calls[0][0]).toBe("/api/goals/g1/cancel");
+    const f2 = mockFetch(204, undefined);
+    vi.stubGlobal("fetch", f2);
+    await api.deleteGoal("g1");
+    expect(f2.mock.calls[0][1].method).toBe("DELETE");
+  });
 });

@@ -255,3 +255,18 @@ describe('autonomous loop', () => {
     expect(store.getGoal(g.id)!.status).toBe('cancelled'); // NOT resurrected to achieved
   });
 });
+
+describe('multi-dimensional QA', () => {
+  it('verify prompt includes only the goal\'s enabled dimension rubrics', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', qaDimensions: ['security'] });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal', source_id: g.id, status: 'idle', result: 'success' });
+    const verifyRun = runs.find((r) => r.sourceKind === 'goal_verify');
+    expect(verifyRun.prompt).toMatch(/SECURITY/i);
+    expect(verifyRun.prompt).not.toMatch(/PERFORMANCE/i);
+    expect(verifyRun.prompt).toMatch(/dimensions/i);
+  });
+});

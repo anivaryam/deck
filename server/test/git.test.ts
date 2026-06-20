@@ -1,0 +1,45 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { isGitRepo, addWorktree, removeWorktree } from '../src/git.ts';
+
+let repo: string;
+let wtBase: string;
+
+beforeEach(() => {
+  repo = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-git-'));
+  execFileSync('git', ['-C', repo, 'init', '-q']);
+  execFileSync('git', ['-C', repo, 'config', 'user.email', 't@t.t']);
+  execFileSync('git', ['-C', repo, 'config', 'user.name', 'T']);
+  fs.writeFileSync(path.join(repo, 'README.md'), 'hi');
+  execFileSync('git', ['-C', repo, 'add', '.']);
+  execFileSync('git', ['-C', repo, 'commit', '-q', '-m', 'init']);
+  wtBase = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-wt-'));
+});
+
+afterEach(() => {
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(wtBase, { recursive: true, force: true });
+});
+
+describe('git worktree helpers', () => {
+  it('isGitRepo is true for a repo, false for a plain dir', () => {
+    expect(isGitRepo(repo)).toBe(true);
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'plain-'));
+    expect(isGitRepo(plain)).toBe(false);
+    fs.rmSync(plain, { recursive: true, force: true });
+  });
+
+  it('adds a worktree on a new branch, then removes it (branch persists)', () => {
+    const wt = path.join(wtBase, 'g1');
+    addWorktree(repo, wt, 'goal/g1');
+    expect(fs.existsSync(path.join(wt, 'README.md'))).toBe(true);
+    const branches = execFileSync('git', ['-C', repo, 'branch', '--list', 'goal/g1']).toString();
+    expect(branches).toMatch(/goal\/g1/);
+    removeWorktree(repo, wt);
+    expect(fs.existsSync(wt)).toBe(false);
+    expect(execFileSync('git', ['-C', repo, 'branch', '--list', 'goal/g1']).toString()).toMatch(/goal\/g1/);
+  });
+});

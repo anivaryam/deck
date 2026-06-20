@@ -7,16 +7,19 @@ import { GoalReportView } from "./goal-report";
 import { useCancelGoal, useDeleteGoal, useRunGoal } from "@/hooks/use-automation-data";
 import { goalStatus, relativeTime } from "@/lib/automation";
 import { ApiError } from "@/lib/api";
-import type { Goal, GoalReport } from "@/lib/types";
+import { GoalVerdictView } from "./goal-verdict";
+import type { Goal, GoalReport, GoalVerdict } from "@/lib/types";
 
 export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => void }) {
   const run = useRunGoal();
   const cancel = useCancelGoal();
   const del = useDeleteGoal();
   const status = goalStatus(goal.status);
-  const building = goal.status === "building";
+  const building = goal.status === "building" || goal.status === "verifying";
   let report: GoalReport | null = null;
   try { report = goal.report ? JSON.parse(goal.report) : null; } catch { report = null; }
+  let verdict: GoalVerdict | null = null;
+  try { verdict = goal.verdict ? JSON.parse(goal.verdict) : null; } catch { verdict = null; }
 
   const onDelete = () => {
     if (!window.confirm(`Delete goal "${goal.title}"? This cannot be undone.`)) return;
@@ -37,6 +40,12 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
         {goal.branch && <div className="mb-3 font-mono text-[11px]">branch: <span className="text-foreground">{goal.branch}</span></div>}
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">created</div>
         <div className="mb-3 text-[11px]">{relativeTime(goal.created_at)}</div>
+        {verdict && (
+          <div className="mb-3">
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Verdict</div>
+            <GoalVerdictView verdict={verdict} />
+          </div>
+        )}
         {report && (
           <div className="mb-3">
             <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Report</div>

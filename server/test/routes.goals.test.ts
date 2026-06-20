@@ -127,4 +127,10 @@ describe('goal routes', () => {
     expect(r.statusCode).toBe(200);
     expect(JSON.parse(r.json().qa_dimensions)).toEqual(['security', 'architecture']);
   });
+
+  it('GET /api/runs accepts source_kind=goal_verify', async () => {
+    const c = await login();
+    const res = await app.inject({ method: 'GET', url: '/api/runs?source_kind=goal_verify&source_id=x', headers: { cookie: c } });
+    expect(res.statusCode).toBe(200);
+  });
 });

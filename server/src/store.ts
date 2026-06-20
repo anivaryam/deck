@@ -2,7 +2,7 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 
-const QA_DIMENSIONS = ['security', 'performance', 'ux', 'architecture'] as const;
+export const QA_DIMENSIONS = ['security', 'performance', 'ux', 'architecture'] as const;
 
 export type SessionStatus = 'idle' | 'active' | 'errored';
 export type SessionKind = 'chat' | 'task';

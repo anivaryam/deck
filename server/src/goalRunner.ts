@@ -44,7 +44,7 @@ function retryPrompt(goalId: string, attempt: number, maxAttempts: number, expec
   ].join('\n');
 }
 
-const DIMENSION_RUBRICS: Record<string, string> = {
+export const DIMENSION_RUBRICS: Record<string, string> = {
   security: 'SECURITY — check for injection, authn/authz flaws, secrets handling, unsafe input / SSRF, and risky dependencies. Fail if there is any material vulnerability.',
   performance: 'PERFORMANCE — check for obvious inefficiencies, N+1 / unbounded work, blocking calls on hot paths, and needless re-renders. Fail if there is a material performance regression.',
   ux: 'UI/UX — if the change has a UI, check usability, loading/empty/error states, basic accessibility, and that flows make sense. Fail if the UX is materially broken or confusing.',

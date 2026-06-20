@@ -10,7 +10,7 @@ export function useTasks() {
   return useQuery({ queryKey: ["tasks"], queryFn: () => api.tasks() });
 }
 
-export function useRuns(sourceKind: "cron" | "ticket", sourceId: string | null) {
+export function useRuns(sourceKind: "cron" | "ticket" | "goal" | "goal_verify", sourceId: string | null) {
   return useQuery({
     queryKey: ["runs", sourceKind, sourceId],
     queryFn: () => (sourceId ? api.runs(sourceKind, sourceId) : Promise.resolve([])),

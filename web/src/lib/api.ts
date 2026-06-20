@@ -162,7 +162,7 @@ export const api = {
   },
 
   // ---- runs ----
-  async runs(sourceKind: "cron" | "ticket", sourceId: string): Promise<Session[]> {
+  async runs(sourceKind: "cron" | "ticket" | "goal" | "goal_verify", sourceId: string): Promise<Session[]> {
     const q = new URLSearchParams({ source_kind: sourceKind, source_id: sourceId });
     return json(await fetch(`/api/runs?${q}`, { credentials: "same-origin" }));
   },

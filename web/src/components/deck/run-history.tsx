@@ -23,7 +23,7 @@ export function RunHistory({
   sourceId,
   projectPath,
 }: {
-  sourceKind: "cron" | "ticket";
+  sourceKind: "cron" | "ticket" | "goal" | "goal_verify";
   sourceId: string;
   projectPath: string;
 }) {

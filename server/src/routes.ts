@@ -21,6 +21,8 @@ export interface RouteDeps {
   manager?: SessionManager;
   /** Optional: close + drop the WS room for a session (from the WS hub). */
   closeRoom?: (id: string) => void;
+  /** Optional: starts a goal pass. Present in production wiring; stubbed in tests. */
+  goalExecutor?: { start: (goalId: string) => void };
 }
 
 /** Cookie carries an opaque session id; valid only if the registry knows it. */
@@ -67,7 +69,7 @@ const INLINE_CT = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp',
 const MAX_SERVE = 50 * 1024 * 1024;
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const { store, config, taskRunner, scheduler, manager, closeRoom } = deps;
+  const { store, config, taskRunner, scheduler, manager, closeRoom, goalExecutor } = deps;
   const auth = deps.auth ?? new AuthSessions();
   const loginLimiter = new RateLimiter(8, 60_000);
 
@@ -377,6 +379,51 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const sessionId = taskRunner.run({ projectPath: tk.project_path, prompt, origin: 'ticket', title: tk.title, sourceKind: 'ticket', sourceId: tk.id });
     store.updateTicket(tk.id, { status: 'running', session_id: sessionId });
     return { session_id: sessionId };
+  });
+
+  // goals
+  app.get('/api/goals', async () => store.listGoals());
+  app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string } }>(
+    '/api/goals',
+    async (req, reply) => {
+      const { title, expected_output, acceptance, project } = req.body ?? {};
+      if (!title || !expected_output || !project) {
+        return reply.code(400).send({ error: 'title, expected_output and project required' });
+      }
+      let projectPath: string;
+      try {
+        projectPath = resolveProjectPath(projectsRoots, project);
+      } catch (e) {
+        return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
+      }
+      return store.createGoal({ projectPath, title, expectedOutput: expected_output, acceptance });
+    },
+  );
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/goals/:id', async (req, reply) => {
+    const g = store.getGoal(req.params.id);
+    if (!g) return reply.code(404).send({ error: 'not found' });
+    const events = g.session_id ? eventsForRequest(g.session_id, req.query?.limit) : [];
+    return { ...g, events };
+  });
+  app.post<{ Params: { id: string } }>('/api/goals/:id/run', async (req, reply) => {
+    const g = store.getGoal(req.params.id);
+    if (!g) return reply.code(404).send({ error: 'not found' });
+    if (g.status === 'building') return reply.code(409).send({ error: 'goal is already building' });
+    goalExecutor?.start(g.id);
+    return store.getGoal(g.id);
+  });
+  app.post<{ Params: { id: string } }>('/api/goals/:id/cancel', async (req, reply) => {
+    const g = store.getGoal(req.params.id);
+    if (!g) return reply.code(404).send({ error: 'not found' });
+    if (g.session_id) manager?.cancel(g.session_id);
+    return { cancelled: true };
+  });
+  app.delete<{ Params: { id: string } }>('/api/goals/:id', async (req, reply) => {
+    const g = store.getGoal(req.params.id);
+    if (!g) return reply.code(404).send({ error: 'not found' });
+    if (g.status === 'building') return reply.code(409).send({ error: 'cancel the goal before deleting it' });
+    store.deleteGoal(g.id);
+    return reply.code(204).send();
   });
 
   app.post<{ Body: { sessionId?: string; filename?: string; dataBase64?: string } }>(

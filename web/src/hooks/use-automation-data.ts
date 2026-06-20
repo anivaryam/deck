@@ -10,7 +10,7 @@ export function useTasks() {
   return useQuery({ queryKey: ["tasks"], queryFn: () => api.tasks() });
 }
 
-export function useRuns(sourceKind: "cron" | "ticket", sourceId: string | null) {
+export function useRuns(sourceKind: "cron" | "ticket" | "goal" | "goal_verify", sourceId: string | null) {
   return useQuery({
     queryKey: ["runs", sourceKind, sourceId],
     queryFn: () => (sourceId ? api.runs(sourceKind, sourceId) : Promise.resolve([])),
@@ -153,7 +153,7 @@ export function useGoal(id: string | null) {
 export function useCreateGoal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { project: string; title: string; expected_output: string; acceptance?: string; max_iterations?: number }) => api.createGoal(body),
+    mutationFn: (body: { project: string; title: string; expected_output: string; acceptance?: string; max_iterations?: number; qa_dimensions?: string[] }) => api.createGoal(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
   });
 }

@@ -256,8 +256,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   // runs
   app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {
     const { source_kind, source_id } = req.query ?? {};
-    if ((source_kind !== 'cron' && source_kind !== 'ticket' && source_kind !== 'goal') || !source_id) {
-      return reply.code(400).send({ error: 'source_kind (cron|ticket|goal) and source_id required' });
+    if ((source_kind !== 'cron' && source_kind !== 'ticket' && source_kind !== 'goal' && source_kind !== 'goal_verify') || !source_id) {
+      return reply.code(400).send({ error: 'source_kind (cron|ticket|goal|goal_verify) and source_id required' });
     }
     return store.listRunsForSource(source_kind, source_id);
   });
@@ -383,10 +383,10 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
 
   // goals
   app.get('/api/goals', async () => store.listGoals());
-  app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string; max_iterations?: number } }>(
+  app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string; max_iterations?: number; qa_dimensions?: string[] } }>(
     '/api/goals',
     async (req, reply) => {
-      const { title, expected_output, acceptance, project, max_iterations } = req.body ?? {};
+      const { title, expected_output, acceptance, project, max_iterations, qa_dimensions } = req.body ?? {};
       if (!title || !title.trim() || !expected_output || !expected_output.trim() || !project) {
         return reply.code(400).send({ error: 'title, expected_output and project required' });
       }
@@ -399,7 +399,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       const maxIterations = Number.isFinite(Number(max_iterations)) && Number(max_iterations) > 0
         ? Math.floor(Number(max_iterations))
         : (config.goalMaxIterations ?? 3);
-      return store.createGoal({ projectPath, title, expectedOutput: expected_output, acceptance, maxIterations });
+      const qaDimensions = Array.isArray(qa_dimensions) ? qa_dimensions.filter((d) => typeof d === 'string') : [];
+      return store.createGoal({ projectPath, title, expectedOutput: expected_output, acceptance, maxIterations, qaDimensions });
     },
   );
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/goals/:id', async (req, reply) => {

@@ -36,4 +36,15 @@ describe('goal_report tool', () => {
     expect(res.content[0].text).toMatch(/verdict recorded/i);
     expect(JSON.parse(store.getGoal(g.id)!.verdict!).achieved).toBe(true);
   });
+
+  it('persists per-dimension verdict results', async () => {
+    const g = store.createGoal({ projectPath: '/p', title: 'T', expectedOutput: 'x' });
+    await goalVerdictHandler(store, g.id, {
+      achieved: false, reasons: 'security issue', unmet_criteria: ['fix injection'], tests_summary: 'pass',
+      dimensions: [{ name: 'correctness', passed: true, notes: 'ok' }, { name: 'security', passed: false, notes: 'sql injection in q' }],
+    });
+    const v = JSON.parse(store.getGoal(g.id)!.verdict!);
+    expect(v.dimensions).toHaveLength(2);
+    expect(v.dimensions[1]).toEqual({ name: 'security', passed: false, notes: 'sql injection in q' });
+  });
 });

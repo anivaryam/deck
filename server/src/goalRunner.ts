@@ -44,14 +44,25 @@ function retryPrompt(goalId: string, attempt: number, maxAttempts: number, expec
   ].join('\n');
 }
 
-function verifyPrompt(goalId: string, expected: string, acceptance: string | null): string {
+export const DIMENSION_RUBRICS: Record<string, string> = {
+  security: 'SECURITY — check for injection, authn/authz flaws, secrets handling, unsafe input / SSRF, and risky dependencies. Fail if there is any material vulnerability.',
+  performance: 'PERFORMANCE — check for obvious inefficiencies, N+1 / unbounded work, blocking calls on hot paths, and needless re-renders. Fail if there is a material performance regression.',
+  ux: 'UI/UX — if the change has a UI, check usability, loading/empty/error states, basic accessibility, and that flows make sense. Fail if the UX is materially broken or confusing.',
+  architecture: 'ARCHITECTURE — check separation of concerns, fit with existing patterns, absence of unjustified complexity or duplication, and clear boundaries. Fail if the design is materially poor.',
+};
+
+function verifyPrompt(goalId: string, expected: string, acceptance: string | null, dimensions: string[]): string {
+  const extra = dimensions
+    .filter((d) => DIMENSION_RUBRICS[d])
+    .map((d) => `- Also rigorously evaluate ${DIMENSION_RUBRICS[d]}`);
   return [
     `A previous agent attempted to achieve the goal below on the CURRENT branch (\`goal/${goalId}\`). Independently and SKEPTICALLY verify whether the goal is genuinely met. Do NOT trust the prior agent's claims. Review the changes (\`git diff\`), run the project's tests yourself, and check each acceptance criterion.`,
     '',
     `Goal (expected output): ${expected}`,
     `Acceptance criteria: ${acceptance && acceptance.trim() ? acceptance : 'verify the changes fully satisfy the expected output above'}`,
+    ...(extra.length ? ['', 'In addition to correctness, evaluate these QA dimensions:', ...extra] : []),
     '',
-    'Be strict: a goal is achieved ONLY if the tests pass and every acceptance criterion is genuinely satisfied. If there are no tests, say so in tests_summary and base the verdict on the criteria plus your own inspection. When done, call the `goal_verdict` tool with your honest structured verdict.',
+    'Be strict: the goal is achieved ONLY if the tests pass, every acceptance criterion is genuinely satisfied, AND every dimension above passes. If there are no tests, say so in tests_summary and base the verdict on the criteria plus your own inspection. For each dimension you evaluated (including correctness), add an entry to `dimensions` with `passed` + concise `notes`. When done, call the `goal_verdict` tool with your honest structured verdict.',
   ].join('\n');
 }
 
@@ -112,12 +123,14 @@ export class SinglePassExecutor implements GoalExecutor {
       this.store.updateGoal(goalId, { status: 'review' });
       return;
     }
+    let dims: string[] = [];
+    try { const p = JSON.parse(g.qa_dimensions); if (Array.isArray(p)) dims = p.filter((d) => typeof d === 'string'); } catch { dims = []; }
     let sessionId: string;
     try {
       sessionId = this.runner.run({
         projectPath: g.project_path,
         cwd: g.worktree_path,
-        prompt: verifyPrompt(goalId, g.expected_output, g.acceptance),
+        prompt: verifyPrompt(goalId, g.expected_output, g.acceptance, dims),
         origin: 'goal',
         title: g.title,
         sourceKind: 'goal_verify',

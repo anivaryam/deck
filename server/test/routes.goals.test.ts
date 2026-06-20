@@ -120,4 +120,11 @@ describe('goal routes', () => {
     await app.inject({ method: 'POST', url: `/api/goals/${id}/run`, headers: { cookie: c } });
     expect(store.getGoal(id)!.iteration).toBe(0);
   });
+
+  it('POST /api/goals stores filtered qa_dimensions', async () => {
+    const c = await login();
+    const r = await app.inject({ method: 'POST', url: '/api/goals', headers: { cookie: c }, payload: { project: 'alpha', title: 'T', expected_output: 'x', qa_dimensions: ['security', 'nope', 'architecture'] } });
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.json().qa_dimensions)).toEqual(['security', 'architecture']);
+  });
 });

@@ -50,6 +50,7 @@ export interface GoalVerdictArgs {
   reasons: string;
   unmet_criteria: string[];
   tests_summary: string;
+  dimensions?: { name: string; passed: boolean; notes: string }[];
 }
 
 export async function goalVerdictHandler(
@@ -125,6 +126,10 @@ export function buildDeckMcp(store: Store, projectPath: string, ticketId?: strin
           reasons: z.string().describe('Why achieved / why not'),
           unmet_criteria: z.array(z.string()).describe('Acceptance criteria not satisfied (empty if achieved)'),
           tests_summary: z.string().describe('What tests you ran and their result'),
+          dimensions: z
+            .array(z.object({ name: z.string(), passed: z.boolean(), notes: z.string() }))
+            .optional()
+            .describe('Per-dimension results (correctness + any requested QA dimensions)'),
         },
         async (args) => goalVerdictHandler(store, verifyGoalId, args as GoalVerdictArgs),
       ),

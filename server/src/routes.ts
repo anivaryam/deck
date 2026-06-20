@@ -408,7 +408,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   app.post<{ Params: { id: string } }>('/api/goals/:id/run', async (req, reply) => {
     const g = store.getGoal(req.params.id);
     if (!g) return reply.code(404).send({ error: 'not found' });
-    if (g.status === 'building') return reply.code(409).send({ error: 'goal is already building' });
+    if (g.status === 'building' || g.status === 'verifying') return reply.code(409).send({ error: 'goal is already in progress' });
     goalExecutor?.start(g.id);
     return store.getGoal(g.id);
   });

@@ -80,6 +80,16 @@ describe('SinglePassExecutor', () => {
     expect(got.status).toBe('failed');
     expect(got.worktree_path).toBeNull();
   });
+
+  it('clears a prior verdict and report when a re-run starts', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 'old' }), verdict: JSON.stringify({ achieved: true }), status: 'achieved' });
+    new SinglePassExecutor(store, taskRunner, wtBase).start(g.id);
+    const got = store.getGoal(g.id)!;
+    expect(got.status).toBe('building');
+    expect(got.report).toBeNull();
+    expect(got.verdict).toBeNull();
+  });
 });
 
 describe('registerGoalAutomation', () => {

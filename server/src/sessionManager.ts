@@ -150,7 +150,7 @@ export class SessionManager extends EventEmitter {
       // watched by a human, so only cap them if DECK_MAX_TURNS is set explicitly.
       const maxTurns = sess.kind === 'task' ? (this.cfg.maxTurns ?? 40) : this.cfg.maxTurns;
       const options: Record<string, unknown> = {
-        cwd: sess.project_path,
+        cwd: sess.cwd || sess.project_path,
         model: sess.model || this.cfg.model,
         // Preset+append (not a bare string): preserves the claude_code system
         // prompt AND its prompt-cache prefix. A plain string replaces the preset

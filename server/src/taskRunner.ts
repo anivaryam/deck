@@ -17,7 +17,7 @@ export class TaskRunner {
    *  session id immediately. A global concurrency cap bounds resource/quota use
    *  (denial-of-wallet protection); over the cap the task is recorded as errored
    *  instead of started. */
-  run(input: { projectPath: string; prompt: string; origin: SessionOrigin; title?: string; model?: string; effort?: string; sourceKind?: 'cron' | 'ticket'; sourceId?: string }): string {
+  run(input: { projectPath: string; prompt: string; origin: SessionOrigin; title?: string; model?: string; effort?: string; sourceKind?: 'cron' | 'ticket'; sourceId?: string; cwd?: string }): string {
     const task = this.store.createTask({
       ...input,
       model: input.model ?? this.taskDefaults.model,

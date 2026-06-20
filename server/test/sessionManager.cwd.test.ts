@@ -1,0 +1,33 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Store } from '../src/store.ts';
+import { SessionManager } from '../src/sessionManager.ts';
+
+let store: Store;
+const cfg = { token: 't', projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' } as any;
+
+beforeEach(() => { store = new Store(':memory:'); });
+
+function captureOptions() {
+  const seen: any = {};
+  const queryFn = ({ options }: any) => {
+    Object.assign(seen, options);
+    return (async function* () { /* no events */ })();
+  };
+  return { seen, queryFn };
+}
+
+describe('sessionManager cwd', () => {
+  it('uses the session cwd override when set, else project_path', async () => {
+    const { seen, queryFn } = captureOptions();
+    const mgr = new SessionManager(store, cfg, queryFn);
+    const task = store.createTask({ projectPath: '/proj', prompt: 'p', origin: 'goal', cwd: '/proj/.wt/abc' });
+    await mgr.send(task.id, 'go');
+    expect(seen.cwd).toBe('/proj/.wt/abc');
+
+    const seen2 = captureOptions();
+    const mgr2 = new SessionManager(store, cfg, seen2.queryFn);
+    const task2 = store.createTask({ projectPath: '/proj', prompt: 'p', origin: 'manual' });
+    await mgr2.send(task2.id, 'go');
+    expect(seen2.seen.cwd).toBe('/proj');
+  });
+});

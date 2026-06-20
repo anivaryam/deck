@@ -21,6 +21,7 @@ export interface SessionRow {
   disabled_tools: string | null;
   source_kind?: string | null;
   source_id?: string | null;
+  cwd?: string | null;
   ended_at?: number | null;
   result?: string | null;
   created_at: number;
@@ -233,8 +234,8 @@ export class Store {
          VALUES (?, ?, ?, NULL, 'idle', 'chat', NULL, 'manual', ?, ?, ?, ?)`,
       ),
       insertTask: db.prepare(
-        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, source_kind, source_id, created_at)
-         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, source_kind, source_id, cwd, created_at)
+         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ),
       getSession: db.prepare(`SELECT * FROM session WHERE id = ?`),
       listAll: db.prepare(`SELECT * FROM session ORDER BY created_at DESC, rowid DESC`),
@@ -341,6 +342,7 @@ export class Store {
     disabledTools?: string[];
     sourceKind?: 'cron' | 'ticket' | 'goal';
     sourceId?: string;
+    cwd?: string;
   }): SessionRow {
     const id = randomUUID();
     const created_at = Date.now();
@@ -355,6 +357,7 @@ export class Store {
       input.disabledTools && input.disabledTools.length ? JSON.stringify(input.disabledTools) : null,
       input.sourceKind ?? null,
       input.sourceId ?? null,
+      input.cwd ?? null,
       created_at,
     );
     return this.get(id)!;

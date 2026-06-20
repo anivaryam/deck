@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../src/store.ts';
 import { SinglePassExecutor, registerGoalAutomation } from '../src/goalRunner.ts';
+import { removeWorktree as removeWorktreeForTest } from '../src/git.ts';
 
 let repo: string, wtBase: string, store: Store, manager: any, runs: any[], taskRunner: any;
 
@@ -55,6 +56,29 @@ describe('SinglePassExecutor', () => {
     expect(runs[0].cwd).toBe(got.worktree_path);
     expect(runs[0].origin).toBe('goal');
     expect(runs[0].prompt).toMatch(/do x/);
+  });
+
+  it('re-run after a prior run succeeds (idempotent worktree/branch reset)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    exec.start(g.id);
+    expect(store.getGoal(g.id)!.status).toBe('building');
+    // simulate the prior run's worktree being removed on terminal, branch left behind
+    const wt = store.getGoal(g.id)!.worktree_path!;
+    removeWorktreeForTest(repo, wt);
+    // re-run must not collide on the existing goal/<id> branch
+    exec.start(g.id);
+    expect(store.getGoal(g.id)!.status).toBe('building');
+    expect(store.getGoal(g.id)!.branch).toBe(`goal/${g.id}`);
+  });
+
+  it('marks failed + cleans worktree when the runner throws', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    const throwingRunner = { run: () => { throw new Error('queue exploded'); } };
+    new SinglePassExecutor(store, throwingRunner as any, wtBase).start(g.id);
+    const got = store.getGoal(g.id)!;
+    expect(got.status).toBe('failed');
+    expect(got.worktree_path).toBeNull();
   });
 });
 

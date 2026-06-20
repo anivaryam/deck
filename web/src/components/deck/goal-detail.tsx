@@ -15,7 +15,8 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
   const del = useDeleteGoal();
   const status = goalStatus(goal.status);
   const building = goal.status === "building";
-  const report: GoalReport | null = goal.report ? JSON.parse(goal.report) : null;
+  let report: GoalReport | null = null;
+  try { report = goal.report ? JSON.parse(goal.report) : null; } catch { report = null; }
 
   const onDelete = () => {
     if (!window.confirm(`Delete goal "${goal.title}"? This cannot be undone.`)) return;

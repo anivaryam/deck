@@ -131,7 +131,11 @@ export function useCancelTask() {
 }
 
 export function useGoals() {
-  return useQuery({ queryKey: ["goals"], queryFn: () => api.goals() });
+  return useQuery({
+    queryKey: ["goals"],
+    queryFn: () => api.goals(),
+    refetchInterval: (q) => (q.state.data?.some((g) => g.status === "building") ? 3000 : false),
+  });
 }
 
 export function useGoal(id: string | null) {

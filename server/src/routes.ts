@@ -256,8 +256,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   // runs
   app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {
     const { source_kind, source_id } = req.query ?? {};
-    if ((source_kind !== 'cron' && source_kind !== 'ticket') || !source_id) {
-      return reply.code(400).send({ error: 'source_kind (cron|ticket) and source_id required' });
+    if ((source_kind !== 'cron' && source_kind !== 'ticket' && source_kind !== 'goal') || !source_id) {
+      return reply.code(400).send({ error: 'source_kind (cron|ticket|goal) and source_id required' });
     }
     return store.listRunsForSource(source_kind, source_id);
   });
@@ -387,7 +387,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     '/api/goals',
     async (req, reply) => {
       const { title, expected_output, acceptance, project } = req.body ?? {};
-      if (!title || !expected_output || !project) {
+      if (!title || !title.trim() || !expected_output || !expected_output.trim() || !project) {
         return reply.code(400).send({ error: 'title, expected_output and project required' });
       }
       let projectPath: string;
@@ -416,6 +416,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const g = store.getGoal(req.params.id);
     if (!g) return reply.code(404).send({ error: 'not found' });
     if (g.session_id) manager?.cancel(g.session_id);
+    else if (g.status === 'queued' || g.status === 'building') store.updateGoal(g.id, { status: 'cancelled' });
     return { cancelled: true };
   });
   app.delete<{ Params: { id: string } }>('/api/goals/:id', async (req, reply) => {

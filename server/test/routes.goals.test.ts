@@ -77,4 +77,18 @@ describe('goal routes', () => {
     store.updateGoal(id, { status: 'review' });
     expect((await app.inject({ method: 'DELETE', url: `/api/goals/${id}`, headers: { cookie: c } })).statusCode).toBe(204);
   });
+
+  it('cancel on a queued goal (no session) marks it cancelled', async () => {
+    const c = await login();
+    const id = (await create(c)).json().id;
+    const res = await app.inject({ method: 'POST', url: `/api/goals/${id}/cancel`, headers: { cookie: c } });
+    expect(res.statusCode).toBe(200);
+    expect(store.getGoal(id)!.status).toBe('cancelled');
+  });
+
+  it('rejects a whitespace-only title/expected_output with 400', async () => {
+    const c = await login();
+    const r = await app.inject({ method: 'POST', url: '/api/goals', headers: { cookie: c }, payload: { project: 'alpha', title: '   ', expected_output: '   ' } });
+    expect(r.statusCode).toBe(400);
+  });
 });

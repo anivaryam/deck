@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Store } from './store.ts';
 import type { SessionManager } from './sessionManager.ts';
-import { isGitRepo, addWorktree, removeWorktree } from './git.ts';
+import { isGitRepo, addWorktree, removeWorktree, resetWorktree } from './git.ts';
 
 export interface GoalExecutor {
   start(goalId: string): void;
@@ -20,9 +20,9 @@ interface RunnerLike {
   }): string;
 }
 
-function goalPrompt(expected: string, acceptance: string | null): string {
+function goalPrompt(goalId: string, expected: string, acceptance: string | null): string {
   return [
-    'You are running a production-grade build to achieve the goal below. You are already on an isolated git worktree on branch `goal/<id>` — work here and commit your changes on this branch. Do NOT merge.',
+    `You are running a production-grade build to achieve the goal below. You are already on an isolated git worktree on branch \`goal/${goalId}\` — work here and commit your changes on this branch. Do NOT merge.`,
     '',
     `Goal (expected output): ${expected}`,
     `Acceptance criteria: ${acceptance && acceptance.trim() ? acceptance : 'none stated'}`,
@@ -49,21 +49,29 @@ export class SinglePassExecutor implements GoalExecutor {
     const branch = `goal/${goalId}`;
     const worktreePath = path.join(this.worktreesDir, goalId);
     try {
+      resetWorktree(g.project_path, worktreePath, branch); // idempotent re-run
       addWorktree(g.project_path, worktreePath, branch);
     } catch (e) {
       this.store.updateGoal(goalId, { status: 'failed', report: JSON.stringify({ error: `worktree setup failed: ${e instanceof Error ? e.message : e}` }) });
       return;
     }
     this.store.updateGoal(goalId, { status: 'building', branch, worktree_path: worktreePath });
-    const sessionId = this.runner.run({
-      projectPath: g.project_path,
-      cwd: worktreePath,
-      prompt: goalPrompt(g.expected_output, g.acceptance),
-      origin: 'goal',
-      title: g.title,
-      sourceKind: 'goal',
-      sourceId: goalId,
-    });
+    let sessionId: string;
+    try {
+      sessionId = this.runner.run({
+        projectPath: g.project_path,
+        cwd: worktreePath,
+        prompt: goalPrompt(goalId, g.expected_output, g.acceptance),
+        origin: 'goal',
+        title: g.title,
+        sourceKind: 'goal',
+        sourceId: goalId,
+      });
+    } catch (e) {
+      try { removeWorktree(g.project_path, worktreePath); } catch { /* best-effort */ }
+      this.store.updateGoal(goalId, { status: 'failed', worktree_path: null, report: JSON.stringify({ error: `failed to start run: ${e instanceof Error ? e.message : e}` }) });
+      return;
+    }
     this.store.updateGoal(goalId, { session_id: sessionId });
   }
 }

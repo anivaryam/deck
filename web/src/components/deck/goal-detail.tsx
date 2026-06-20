@@ -74,9 +74,7 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
           <div className="shrink-0 px-4 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
             live output · {goal.status}
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <TaskOutput taskId={goal.session_id} />
-          </div>
+          <TaskOutput taskId={goal.session_id} />
         </div>
       )}
       <div className="flex gap-2 border-t border-border p-4">

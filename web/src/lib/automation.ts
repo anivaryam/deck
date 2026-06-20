@@ -20,6 +20,8 @@ export function taskStatus(s: Pick<Session, "status">): AutomationStatus {
 export function goalStatus(s: string): AutomationStatus {
   switch (s) {
     case "building": return "running";
+    case "verifying": return "running";
+    case "achieved": return "merged";
     case "review": return "review";
     case "failed": return "failed";
     case "cancelled": return "closed";

@@ -123,17 +123,25 @@ export interface GoalReport {
   error?: string;
 }
 
+export interface GoalVerdict {
+  achieved: boolean;
+  reasons: string;
+  unmet_criteria: string[];
+  tests_summary: string;
+}
+
 export interface Goal {
   id: string;
   project_path: string;
   title: string;
   expected_output: string;
   acceptance: string | null;
-  status: "queued" | "building" | "review" | "failed" | "cancelled";
+  status: "queued" | "building" | "verifying" | "achieved" | "review" | "failed" | "cancelled";
   branch: string | null;
   worktree_path: string | null;
   session_id: string | null;
   report: string | null;
+  verdict: string | null;
   created_at: number;
 }
 

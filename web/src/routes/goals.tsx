@@ -8,7 +8,7 @@ import { GoalForm } from "@/components/deck/goal-form";
 import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useGoal, useGoals } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
-import { byProjectPath, projectNameForPath } from "@/lib/automation";
+import { byProjectPath, projectNameForPath, resolveSelectedGoal } from "@/lib/automation";
 
 export const Route = createFileRoute("/goals")({
   validateSearch: (s: Record<string, unknown>) => ({ project: String(s.project ?? "") }),
@@ -28,7 +28,7 @@ function GoalsRoute() {
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
   const rows = useMemo(() => byProjectPath(data ?? [], project), [data, project]);
   const selectedLive = useGoal(selId);
-  const selected = selectedLive.data ?? rows.find((g) => g.id === selId) ?? null;
+  const selected = resolveSelectedGoal(selectedLive.data, rows, selId, project);
 
   const projectThreadId = useMemo(() => {
     const chats = (sessions.data ?? []).filter(

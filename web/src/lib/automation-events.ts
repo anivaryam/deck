@@ -8,6 +8,13 @@ export type TaskFrame = {
 
 export type TaskToast = { intent: "success" | "error"; message: string };
 
+/** Query keys to invalidate on every task lifecycle frame. Goal and goal_verify
+ *  runs emit these frames too, so goals must refresh live like the other
+ *  automation entities (tasks/tickets/cron/runs) instead of relying solely on the
+ *  goals-list poll — which only runs while a goal is mid-build and so misses
+ *  transitions made elsewhere (other tabs, the autonomous loop) once idle. */
+export const TASK_FRAME_QUERY_KEYS = ["tasks", "tickets", "cron", "runs", "goals"] as const;
+
 /** Map a lifecycle frame to a toast intent, or null when no toast should fire.
  *  Only finished cron/ticket runs that succeeded or errored produce a toast. */
 export function toastForTask(f: TaskFrame): TaskToast | null {

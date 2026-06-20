@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { useTaskEvents } from "@/lib/ws-events";
-import { toastForTask } from "@/lib/automation-events";
+import { toastForTask, TASK_FRAME_QUERY_KEYS } from "@/lib/automation-events";
 import {
   notificationForTask,
   notificationsEnabled,
@@ -77,10 +77,9 @@ function TaskEventWatcher() {
   }, []);
 
   useTaskEvents((frame) => {
-    qc.invalidateQueries({ queryKey: ["tasks"], type: "active" });
-    qc.invalidateQueries({ queryKey: ["tickets"], type: "active" });
-    qc.invalidateQueries({ queryKey: ["cron"], type: "active" });
-    qc.invalidateQueries({ queryKey: ["runs"], type: "active" });
+    for (const key of TASK_FRAME_QUERY_KEYS) {
+      qc.invalidateQueries({ queryKey: [key], type: "active" });
+    }
 
     const t = toastForTask(frame);
     if (t) (t.intent === "error" ? toast.error : toast.success)(t.message);

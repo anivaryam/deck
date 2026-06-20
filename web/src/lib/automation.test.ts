@@ -8,6 +8,7 @@ import {
   relativeTime,
   projectNameForPath,
   byProjectPath,
+  resolveSelectedGoal,
   TICKET_TABS,
   filterTicketsByTab,
 } from "./automation";
@@ -111,5 +112,32 @@ describe("goalStatus", () => {
   it("maps verifying and achieved", () => {
     expect(goalStatus("verifying")).toBe("running");
     expect(goalStatus("achieved")).toBe("merged");
+  });
+});
+
+describe("resolveSelectedGoal", () => {
+  const a = { id: "g1", project_path: "/p/a" };
+  const b = { id: "g2", project_path: "/p/b" };
+
+  it("returns the live goal when it matches the selection and project", () => {
+    expect(resolveSelectedGoal(a, [a], "g1", "/p/a")).toBe(a);
+  });
+
+  it("ignores a live goal from a different project (cross-project leak)", () => {
+    // selId still points at project-a's goal, but we are now viewing project b.
+    // The live query returns the project-a goal; it must NOT be shown for project b.
+    expect(resolveSelectedGoal(a, [b], "g1", "/p/b")).toBeNull();
+  });
+
+  it("falls back to the project-scoped row when live data is absent", () => {
+    expect(resolveSelectedGoal(null, [a], "g1", "/p/a")).toBe(a);
+  });
+
+  it("ignores a stale live goal whose id no longer matches the selection", () => {
+    expect(resolveSelectedGoal(a, [b], "g2", "/p/b")).toBe(b);
+  });
+
+  it("returns null when nothing matches the selection", () => {
+    expect(resolveSelectedGoal(null, [], "g1", "/p/a")).toBeNull();
   });
 });

@@ -90,6 +90,22 @@ export function byProjectPath<T extends { project_path: string }>(rows: T[], pat
   return rows.filter((r) => r.project_path === path);
 }
 
+/** Resolve the goal to render in the detail pane. The live per-goal query
+ *  (useGoal) fetches by id WITHOUT a project filter, so after switching projects
+ *  it can still hold a goal from the previous project. Trust the live row only
+ *  when it matches the current selection AND the current project; otherwise fall
+ *  back to the project-scoped list (which never contains another project's goals).
+ *  Prevents viewing/acting on a goal that belongs to a different project. */
+export function resolveSelectedGoal<T extends { id: string; project_path: string }>(
+  live: T | null | undefined,
+  rows: T[],
+  selectedId: string | null,
+  project: string,
+): T | null {
+  if (live && live.id === selectedId && live.project_path === project) return live;
+  return rows.find((g) => g.id === selectedId) ?? null;
+}
+
 export const TICKET_TABS = ["all", "open", "running", "review", "done", "failed", "merged", "closed"] as const;
 export type TicketTab = (typeof TICKET_TABS)[number];
 

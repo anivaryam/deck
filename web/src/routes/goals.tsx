@@ -45,6 +45,7 @@ function GoalsRoute() {
       projectName={name ?? project}
       projectThreadId={projectThreadId}
       section="Goals"
+      detailWide
       actions={
         <Button disabled={!name} onClick={() => setCreating(true)}>+ New goal</Button>
       }

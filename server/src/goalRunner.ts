@@ -153,6 +153,8 @@ export function registerGoalAutomation(
         }
       };
 
+      if (g.status === 'cancelled') { cleanup(); return; }
+
       if (kind === 'goal') {
         if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
         if (frame.result === 'success' && g.report) {

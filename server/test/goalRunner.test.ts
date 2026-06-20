@@ -228,4 +228,30 @@ describe('autonomous loop', () => {
     manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
     expect(store.getGoal(g.id)!.status).toBe('achieved');
   });
+
+  it('cancelled verify terminal stops the loop (no retry)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 3 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal', source_id: g.id, status: 'idle', result: 'success' });
+    const buildsBefore = runs.filter((r) => r.sourceKind === 'goal').length;
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'cancelled' });
+    expect(store.getGoal(g.id)!.status).toBe('cancelled');
+    expect(runs.filter((r) => r.sourceKind === 'goal').length).toBe(buildsBefore);
+  });
+
+  it('a frame on an already-cancelled goal does not resurrect it', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 3 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal', source_id: g.id, status: 'idle', result: 'success' }); // verifying
+    store.updateGoal(g.id, { status: 'cancelled' }); // user cancelled mid-verify
+    store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: true, reasons: 'x', unmet_criteria: [], tests_summary: '' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
+    expect(store.getGoal(g.id)!.status).toBe('cancelled'); // NOT resurrected to achieved
+  });
 });

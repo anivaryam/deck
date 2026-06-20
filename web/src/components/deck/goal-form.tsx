@@ -7,6 +7,7 @@ export function GoalForm({ projectName, onDone }: { projectName: string; onDone:
   const [title, setTitle] = useState("");
   const [expected, setExpected] = useState("");
   const [acceptance, setAcceptance] = useState("");
+  const [maxIterations, setMaxIterations] = useState(3);
   const [err, setErr] = useState<string | null>(null);
   const create = useCreateGoal();
 
@@ -14,7 +15,7 @@ export function GoalForm({ projectName, onDone }: { projectName: string; onDone:
     e.preventDefault();
     setErr(null);
     try {
-      await create.mutateAsync({ project: projectName, title, expected_output: expected, acceptance: acceptance || undefined });
+      await create.mutateAsync({ project: projectName, title, expected_output: expected, acceptance: acceptance || undefined, max_iterations: maxIterations });
       onDone();
     } catch (x) {
       setErr(x instanceof ApiError ? x.message : "failed to create goal");
@@ -45,6 +46,17 @@ export function GoalForm({ projectName, onDone }: { projectName: string; onDone:
         onChange={(e) => setAcceptance(e.target.value)}
       />
       {err && <p className="text-xs text-destructive">{err}</p>}
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        Max attempts
+        <input
+          type="number"
+          min={1}
+          max={10}
+          className="w-16 rounded-md border border-input bg-input/40 px-2 py-1 text-sm"
+          value={maxIterations}
+          onChange={(e) => setMaxIterations(Math.max(1, Number(e.target.value) || 1))}
+        />
+      </label>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>
         <Button type="submit" disabled={!title || !expected || create.isPending}>

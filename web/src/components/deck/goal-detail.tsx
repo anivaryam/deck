@@ -8,6 +8,7 @@ import { RunHistory } from "./run-history";
 import { useCancelGoal, useDeleteGoal, useRunGoal } from "@/hooks/use-automation-data";
 import { goalStatus, relativeTime } from "@/lib/automation";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { GoalVerdictView } from "./goal-verdict";
 import type { Goal, GoalReport, GoalVerdict } from "@/lib/types";
 
@@ -38,7 +39,7 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
         <div className="mb-2"><StatusChip status={status} /></div>
         <h2 className="text-sm font-bold leading-snug">{goal.title}</h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 text-xs text-muted-foreground">
+      <div className={cn("overflow-y-auto p-4 text-xs text-muted-foreground", goal.session_id ? "max-h-[45%] shrink-0" : "flex-1")}>
         <p className="mb-3 whitespace-pre-wrap leading-relaxed">{goal.expected_output}</p>
         {goal.branch && <div className="mb-3 font-mono text-[11px]">branch: <span className="text-foreground">{goal.branch}</span></div>}
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">attempt</div>
@@ -67,12 +68,17 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
         <RunHistory sourceKind="goal" sourceId={goal.id} projectPath={goal.project_path} />
         <div className="mb-1 mt-3 text-[10px] uppercase tracking-wide text-muted-foreground">verifications</div>
         <RunHistory sourceKind="goal_verify" sourceId={goal.id} projectPath={goal.project_path} />
-        {goal.session_id && (
-          <div className="mt-2 h-64 overflow-hidden rounded-md border border-border">
+      </div>
+      {goal.session_id && (
+        <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+          <div className="shrink-0 px-4 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            live output · {goal.status}
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
             <TaskOutput taskId={goal.session_id} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
       <div className="flex gap-2 border-t border-border p-4">
         {building ? (
           <Button className="flex-1" variant="ghost" disabled={cancel.isPending} onClick={() => cancel.mutate(goal.id)}>

@@ -10,6 +10,7 @@ export function AutomationPage({
   actions,
   list,
   detail,
+  detailWide,
   onCloseDetail,
 }: {
   projectName: string;
@@ -18,6 +19,8 @@ export function AutomationPage({
   actions?: ReactNode;
   list: ReactNode;
   detail?: ReactNode;
+  /** Wider detail pane — for goals, whose live agent output needs room to read. */
+  detailWide?: boolean;
   onCloseDetail?: () => void;
 }) {
   return (
@@ -48,7 +51,7 @@ export function AutomationPage({
         {detail && (
           // Desktop: side pane. Mobile (<md): full-screen overlay above the list
           // with a Back affordance — without this the detail was simply hidden.
-          <aside className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background md:static md:inset-auto md:z-auto md:w-[340px] md:shrink-0 md:border-l md:border-border">
+          <aside className={`absolute inset-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:shrink-0 md:border-l md:border-border ${detailWide ? "md:w-[40rem] md:max-w-[55%]" : "md:w-[340px] overflow-y-auto"}`}>
             {onCloseDetail && (
               <button
                 onClick={onCloseDetail}
@@ -58,7 +61,7 @@ export function AutomationPage({
                 ← Back
               </button>
             )}
-            {detail}
+            {detailWide ? <div className="flex min-h-0 flex-1 flex-col">{detail}</div> : detail}
           </aside>
         )}
       </div>

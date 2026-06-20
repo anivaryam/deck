@@ -58,4 +58,11 @@ describe('Store goals', () => {
     store.updateGoal(a.id, { iteration: 2 });
     expect(store.getGoal(a.id)!.iteration).toBe(2);
   });
+
+  it('stores qa_dimensions (default empty) and filters to the allowlist', () => {
+    const a = store.createGoal({ projectPath: '/p', title: 'A', expectedOutput: 'x' });
+    expect(JSON.parse(store.getGoal(a.id)!.qa_dimensions)).toEqual([]);
+    const b = store.createGoal({ projectPath: '/p', title: 'B', expectedOutput: 'x', qaDimensions: ['security', 'bogus', 'performance'] });
+    expect(JSON.parse(store.getGoal(b.id)!.qa_dimensions)).toEqual(['security', 'performance']);
+  });
 });

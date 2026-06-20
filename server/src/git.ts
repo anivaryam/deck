@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 /** True if `dir` is inside a git work tree. */
 export function isGitRepo(dir: string): boolean {
@@ -11,9 +12,30 @@ export function isGitRepo(dir: string): boolean {
   }
 }
 
-/** Create a worktree at `worktreePath` on a new branch `branch`, off the repo's HEAD. */
+/** True if the repo has at least one commit (a valid HEAD). A worktree cannot be
+ *  created from an empty repo. */
+export function hasCommits(dir: string): boolean {
+  try {
+    execFileSync('git', ['-C', dir, 'rev-parse', '--verify', 'HEAD'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Create a worktree at `worktreePath` on a new branch `branch`, off the repo's HEAD.
+ *  Ensures the parent (worktrees base) directory exists, and surfaces git's real
+ *  stderr on failure instead of a bare "Command failed". */
 export function addWorktree(repo: string, worktreePath: string, branch: string): void {
-  execFileSync('git', ['-C', repo, 'worktree', 'add', '-b', branch, worktreePath, 'HEAD'], { stdio: 'ignore' });
+  fs.mkdirSync(path.dirname(worktreePath), { recursive: true });
+  try {
+    execFileSync('git', ['-C', repo, 'worktree', 'add', '-b', branch, worktreePath, 'HEAD'], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+  } catch (e: unknown) {
+    const stderr = (e as { stderr?: Buffer })?.stderr?.toString().trim();
+    throw new Error(stderr || (e instanceof Error ? e.message : String(e)));
+  }
 }
 
 /** Remove a worktree dir (keeps the branch). Force-removes even if dirty. */

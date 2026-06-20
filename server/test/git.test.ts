@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isGitRepo, addWorktree, removeWorktree } from '../src/git.ts';
+import { isGitRepo, hasCommits, addWorktree, removeWorktree } from '../src/git.ts';
 
 let repo: string;
 let wtBase: string;
@@ -41,5 +41,29 @@ describe('git worktree helpers', () => {
     removeWorktree(repo, wt);
     expect(fs.existsSync(wt)).toBe(false);
     expect(execFileSync('git', ['-C', repo, 'branch', '--list', 'goal/g1']).toString()).toMatch(/goal\/g1/);
+  });
+});
+
+describe('git worktree helpers — robustness', () => {
+  it('hasCommits is true for a repo with a commit, false for an empty repo', () => {
+    expect(hasCommits(repo)).toBe(true);
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-empty-'));
+    execFileSync('git', ['-C', empty, 'init', '-q']);
+    expect(hasCommits(empty)).toBe(false);
+    fs.rmSync(empty, { recursive: true, force: true });
+  });
+
+  it('addWorktree creates a missing parent (worktrees base) directory', () => {
+    const deep = path.join(wtBase, 'does', 'not', 'exist', 'g2');
+    addWorktree(repo, deep, 'goal/g2');
+    expect(fs.existsSync(path.join(deep, 'README.md'))).toBe(true);
+    removeWorktree(repo, deep);
+  });
+
+  it('addWorktree surfaces git stderr (empty-repo HEAD) instead of a bare command', () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-empty-'));
+    execFileSync('git', ['-C', empty, 'init', '-q']);
+    expect(() => addWorktree(empty, path.join(wtBase, 'g3'), 'goal/g3')).toThrow(/HEAD|invalid reference/i);
+    fs.rmSync(empty, { recursive: true, force: true });
   });
 });

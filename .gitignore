@@ -16,3 +16,6 @@ dist/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# goal-driven worktrees (transient, created per goal run)
+deck-goal-worktrees/

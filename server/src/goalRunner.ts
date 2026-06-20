@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Store } from './store.ts';
 import type { SessionManager } from './sessionManager.ts';
-import { isGitRepo, addWorktree, removeWorktree, resetWorktree } from './git.ts';
+import { isGitRepo, hasCommits, addWorktree, removeWorktree, resetWorktree } from './git.ts';
 
 export interface GoalExecutor {
   start(goalId: string): void;
@@ -79,6 +79,10 @@ export class SinglePassExecutor implements GoalExecutor {
     if (!g) return;
     if (!isGitRepo(g.project_path)) {
       this.store.updateGoal(goalId, { status: 'failed', report: JSON.stringify({ error: 'project is not a git repository' }) });
+      return;
+    }
+    if (!hasCommits(g.project_path)) {
+      this.store.updateGoal(goalId, { status: 'failed', report: JSON.stringify({ error: 'project has no commits yet — make an initial commit before running a goal' }) });
       return;
     }
     const branch = `goal/${goalId}`;

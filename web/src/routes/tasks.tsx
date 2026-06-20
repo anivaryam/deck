@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AutomationPage, NoProject } from "@/components/deck/automation-page";
 import { TasksList } from "@/components/deck/tasks-list";
 import { TaskOutput } from "@/components/deck/task-output";
+import { TaskActions } from "@/components/deck/task-actions";
+import { TaskForm } from "@/components/deck/task-form";
 import { AsyncBoundary, useAuthRedirect } from "@/components/deck/async-boundary";
 import { useTasks } from "@/hooks/use-automation-data";
 import { useProjects, useSessions } from "@/hooks/use-deck-data";
@@ -21,11 +24,13 @@ function TasksRoute() {
   const { data } = tasksQ;
   useAuthRedirect(tasksQ.error, projects.error, sessions.error);
   const [selId, setSelId] = useState<string | null>(task ?? null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => { if (task) setSelId(task); }, [task]);
 
   const name = projects.data ? projectNameForPath(projects.data, project) : null;
   const rows = useMemo(() => byProjectPath(data ?? [], project), [data, project]);
+  const selected = useMemo(() => rows.find((t) => t.id === selId) ?? null, [rows, selId]);
 
   const projectThreadId = useMemo(() => {
     const chats = (sessions.data ?? []).filter(
@@ -42,12 +47,30 @@ function TasksRoute() {
       projectName={name ?? project}
       projectThreadId={projectThreadId}
       section="Tasks"
-      list={
-        <AsyncBoundary query={tasksQ} label="tasks">
-          <TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />
-        </AsyncBoundary>
+      actions={
+        <Button disabled={!name} onClick={() => setCreating(true)}>
+          + New task
+        </Button>
       }
-      detail={selId ? <TaskOutput taskId={selId} /> : undefined}
+      list={
+        creating && name ? (
+          <TaskForm projectName={name} onDone={() => setCreating(false)} />
+        ) : (
+          <AsyncBoundary query={tasksQ} label="tasks">
+            <TasksList tasks={rows} selectedId={selId} onSelect={(t) => setSelId(t.id)} />
+          </AsyncBoundary>
+        )
+      }
+      detail={
+        selected ? (
+          <div className="flex h-full flex-col">
+            <TaskActions task={selected} projectName={name} onDeleted={() => setSelId(null)} />
+            <TaskOutput taskId={selected.id} />
+          </div>
+        ) : selId ? (
+          <TaskOutput taskId={selId} />
+        ) : undefined
+      }
       onCloseDetail={() => setSelId(null)}
     />
   );

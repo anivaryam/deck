@@ -390,6 +390,22 @@ export class Store {
     this.stmts.setCronEnabled.run(on ? 1 : 0, id);
   }
 
+  /** Update a cron's schedule and/or prompt in place (keeps run history). Column
+   *  names are a fixed allowlist — safe to interpolate. No-op on an empty patch. */
+  updateCron(id: string, p: { schedule?: string; prompt?: string }): void {
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const k of ['schedule', 'prompt'] as const) {
+      if (p[k] !== undefined) {
+        sets.push(`${k} = ?`);
+        vals.push(p[k]);
+      }
+    }
+    if (!sets.length) return;
+    vals.push(id);
+    this.db.prepare(`UPDATE cron SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  }
+
   deleteCron(id: string): void {
     this.stmts.deleteCron.run(id);
   }

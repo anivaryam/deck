@@ -1,22 +1,37 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useCreateTicket } from "@/hooks/use-automation-data";
+import { useCreateTicket, useUpdateTicket } from "@/hooks/use-automation-data";
 import { ApiError } from "@/lib/api";
 
-export function TicketForm({ projectName, onDone }: { projectName: string; onDone: () => void }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+export function TicketForm({
+  projectName,
+  onDone,
+  initial,
+}: {
+  projectName?: string;
+  onDone: () => void;
+  initial?: { id: string; title: string; body: string };
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
   const [err, setErr] = useState<string | null>(null);
   const create = useCreateTicket();
+  const update = useUpdateTicket();
+  const editing = !!initial;
+  const pending = create.isPending || update.isPending;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     try {
-      await create.mutateAsync({ project: projectName, title, body: body || undefined });
+      if (editing) {
+        await update.mutateAsync({ id: initial!.id, patch: { title, body } });
+      } else {
+        await create.mutateAsync({ project: projectName!, title, body: body || undefined });
+      }
       onDone();
     } catch (x) {
-      setErr(x instanceof ApiError ? x.message : "failed to create ticket");
+      setErr(x instanceof ApiError ? x.message : `failed to ${editing ? "update" : "create"} ticket`);
     }
   }
 
@@ -41,8 +56,8 @@ export function TicketForm({ projectName, onDone }: { projectName: string; onDon
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!title || create.isPending}>
-          {create.isPending ? "Creating…" : "Create ticket"}
+        <Button type="submit" disabled={!title || pending}>
+          {pending ? "Saving…" : editing ? "Save changes" : "Create ticket"}
         </Button>
       </div>
     </form>

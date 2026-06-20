@@ -136,6 +136,30 @@ export const api = {
       }),
     );
   },
+  async cancelTask(id: string): Promise<{ aborted: boolean }> {
+    return json(
+      await fetch(`/api/tasks/${id}/cancel`, {
+        method: "POST",
+        credentials: "same-origin",
+      }),
+    );
+  },
+  async deleteTask(id: string): Promise<void> {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      let msg = `${res.status}`;
+      try {
+        const b = await res.json();
+        if (b?.error) msg = b.error;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, msg);
+    }
+  },
 
   // ---- runs ----
   async runs(sourceKind: "cron" | "ticket", sourceId: string): Promise<Session[]> {
@@ -161,12 +185,23 @@ export const api = {
       }),
     );
   },
-  async updateCron(id: string, enabled: boolean): Promise<Cron> {
+  async updateCron(
+    id: string,
+    patch: { enabled?: boolean; schedule?: string; prompt?: string },
+  ): Promise<Cron> {
     return json(
       await fetch(`/api/cron/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(patch),
+        credentials: "same-origin",
+      }),
+    );
+  },
+  async runCron(id: string): Promise<{ session_id: string }> {
+    return json(
+      await fetch(`/api/cron/${id}/run`, {
+        method: "POST",
         credentials: "same-origin",
       }),
     );
@@ -208,7 +243,7 @@ export const api = {
   },
   async updateTicket(
     id: string,
-    patch: { status?: string; pr_url?: string },
+    patch: { status?: string; pr_url?: string; title?: string; body?: string },
   ): Promise<Ticket> {
     return json(
       await fetch(`/api/tickets/${id}`, {

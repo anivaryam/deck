@@ -230,6 +230,26 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const id = taskRunner.run({ projectPath, prompt, origin: 'manual', model, effort });
     return { id };
   });
+  app.delete<{ Params: { id: string } }>('/api/tasks/:id', async (req, reply) => {
+    const s = store.get(req.params.id);
+    if (!s || s.kind !== 'task') return reply.code(404).send({ error: 'not found' });
+    // A run record is immutable history; deleting a live run would orphan its
+    // in-flight turn. Make the caller cancel first.
+    if (s.status === 'active' || manager?.isActive(req.params.id)) {
+      return reply.code(409).send({ error: 'cancel the task before deleting it' });
+    }
+    store.deleteSession(req.params.id); // reuses the event-cascade transaction
+    closeRoom?.(req.params.id);
+    return reply.code(204).send();
+  });
+  app.post<{ Params: { id: string } }>('/api/tasks/:id/cancel', async (req, reply) => {
+    const s = store.get(req.params.id);
+    if (!s || s.kind !== 'task') return reply.code(404).send({ error: 'not found' });
+    // Reuse the same abort path the chat WS + session-delete use. Idempotent:
+    // cancel() returns false when no turn is in flight.
+    const aborted = manager?.cancel(req.params.id) ?? false;
+    return { aborted };
+  });
 
   // runs
   app.get<{ Querystring: { source_kind?: string; source_id?: string } }>('/api/runs', async (req, reply) => {
@@ -261,16 +281,51 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     scheduler.reload();
     return c;
   });
-  app.patch<{ Params: { id: string }; Body: { enabled?: boolean } }>('/api/cron/:id', async (req, reply) => {
-    if (!store.getCron(req.params.id)) return reply.code(404).send({ error: 'not found' });
-    if (typeof req.body?.enabled === 'boolean') store.setCronEnabled(req.params.id, req.body.enabled);
-    scheduler.reload();
-    return store.getCron(req.params.id);
-  });
+  app.patch<{ Params: { id: string }; Body: { enabled?: boolean; schedule?: string; prompt?: string } }>(
+    '/api/cron/:id',
+    async (req, reply) => {
+      if (!store.getCron(req.params.id)) return reply.code(404).send({ error: 'not found' });
+      const { enabled, schedule, prompt } = req.body ?? {};
+      if (schedule !== undefined) {
+        if (!Scheduler.isValid(schedule)) return reply.code(400).send({ error: 'invalid cron expression' });
+        const minGap = config.cronMinIntervalSec ?? 60;
+        const gap = Scheduler.minIntervalSec(schedule);
+        if (gap !== null && gap < minGap) {
+          return reply.code(400).send({ error: `cron fires too frequently — minimum ${minGap}s between runs` });
+        }
+      }
+      if (prompt !== undefined && !prompt.trim()) return reply.code(400).send({ error: 'prompt cannot be empty' });
+      if (typeof enabled === 'boolean') store.setCronEnabled(req.params.id, enabled);
+      if (schedule !== undefined || prompt !== undefined) store.updateCron(req.params.id, { schedule, prompt });
+      scheduler.reload();
+      return store.getCron(req.params.id);
+    },
+  );
   app.delete<{ Params: { id: string } }>('/api/cron/:id', async (req, reply) => {
     store.deleteCron(req.params.id);
     scheduler.reload();
     return reply.code(204).send();
+  });
+  app.post<{ Params: { id: string } }>('/api/cron/:id/run', async (req, reply) => {
+    const c = store.getCron(req.params.id);
+    if (!c) return reply.code(404).send({ error: 'not found' });
+    if (c.enabled !== 1) return reply.code(409).send({ error: 'cron is disabled — enable it first' });
+    // Same overlap guard the scheduler applies — don't stack a second run (and its
+    // spend) on top of one already in flight. Min-interval is intentionally NOT
+    // checked here: a manual fire is an explicit user action.
+    if (c.last_session_id) {
+      const prev = store.get(c.last_session_id);
+      if (prev && prev.status === 'active') return reply.code(409).send({ error: 'a run is already in progress' });
+    }
+    const sessionId = taskRunner.run({
+      projectPath: c.project_path,
+      prompt: c.prompt,
+      origin: 'cron',
+      sourceKind: 'cron',
+      sourceId: c.id,
+    });
+    store.recordCronRun(c.id, sessionId);
+    return { session_id: sessionId };
   });
 
   // tickets
@@ -286,11 +341,13 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     }
     return store.createTicket({ title, body, projectPath });
   });
-  app.patch<{ Params: { id: string }; Body: { status?: string; pr_url?: string } }>(
+  app.patch<{ Params: { id: string }; Body: { status?: string; pr_url?: string; title?: string; body?: string } }>(
     '/api/tickets/:id',
     async (req, reply) => {
       if (!store.getTicket(req.params.id)) return reply.code(404).send({ error: 'not found' });
-      store.updateTicket(req.params.id, { status: req.body?.status, pr_url: req.body?.pr_url });
+      const { status, pr_url, title, body } = req.body ?? {};
+      if (title !== undefined && !title.trim()) return reply.code(400).send({ error: 'title cannot be empty' });
+      store.updateTicket(req.params.id, { status, pr_url, title, body });
       return store.getTicket(req.params.id);
     },
   );

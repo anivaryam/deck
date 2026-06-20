@@ -42,7 +42,7 @@ export function useCreateTicket() {
 export function useUpdateTicket() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; patch: { status?: string; pr_url?: string } }) =>
+    mutationFn: (args: { id: string; patch: { status?: string; pr_url?: string; title?: string; body?: string } }) =>
       api.updateTicket(args.id, args.patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
   });
@@ -52,9 +52,10 @@ export function useRunTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.runTicket(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["tickets"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["runs", "ticket", id] });
     },
   });
 }
@@ -87,8 +88,21 @@ export function useCreateCron() {
 export function useUpdateCron() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; enabled: boolean }) => api.updateCron(args.id, args.enabled),
+    mutationFn: (args: { id: string; patch: { enabled?: boolean; schedule?: string; prompt?: string } }) =>
+      api.updateCron(args.id, args.patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cron"] }),
+  });
+}
+
+export function useRunCron() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.runCron(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["cron"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["runs", "cron", id] });
+    },
   });
 }
 
@@ -97,5 +111,21 @@ export function useDeleteCron() {
   return useMutation({
     mutationFn: (id: string) => api.deleteCron(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cron"] }),
+  });
+}
+
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTask(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useCancelTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.cancelTask(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }

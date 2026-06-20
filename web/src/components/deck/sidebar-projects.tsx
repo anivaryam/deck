@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Clock, FolderGit2, FolderPlus, ListChecks, MessageSquare, MessageSquarePlus, Plus, Search, TerminalSquare, Ticket as TicketIcon, Trash2, X } from "lucide-react";
+import { ChevronRight, Clock, FolderGit2, FolderPlus, ListChecks, MessageSquare, MessageSquarePlus, Plus, Search, Target, TerminalSquare, Ticket as TicketIcon, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -274,6 +274,14 @@ export function SidebarProjects({
                     className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground [&.active]:bg-sidebar-accent [&.active]:text-primary"
                   >
                     <Clock className="size-3.5" /> Cron
+                  </Link>
+                  <Link
+                    to="/goals"
+                    search={{ project: p.path }}
+                    onClick={onNavigate}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground [&.active]:bg-sidebar-accent [&.active]:text-primary"
+                  >
+                    <Target className="size-3.5" /> Goals
                   </Link>
                   <button
                     onClick={() => setChatsOpen((s) => ({ ...s, [p.path]: !(s[p.path] ?? false) }))}

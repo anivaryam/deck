@@ -148,9 +148,11 @@ export class SessionManager extends EventEmitter {
       // Unattended task/cron runs get a turn ceiling so a stuck/looping agent
       // can't burn tokens unbounded (denial-of-wallet). Interactive sessions are
       // watched by a human, so only cap them if DECK_MAX_TURNS is set explicitly.
-      const maxTurns = sess.kind === 'task' ? (this.cfg.maxTurns ?? 40) : this.cfg.maxTurns;
+      const maxTurns = sess.kind === 'task'
+        ? (sess.source_kind === 'goal' ? (this.cfg.goalMaxTurns ?? 150) : (this.cfg.maxTurns ?? 40))
+        : this.cfg.maxTurns;
       const options: Record<string, unknown> = {
-        cwd: sess.project_path,
+        cwd: sess.cwd || sess.project_path,
         model: sess.model || this.cfg.model,
         // Preset+append (not a bare string): preserves the claude_code system
         // prompt AND its prompt-cache prefix. A plain string replaces the preset
@@ -166,6 +168,7 @@ export class SessionManager extends EventEmitter {
             this.store,
             sess.project_path,
             sess.source_kind === 'ticket' && sess.source_id ? sess.source_id : undefined,
+            sess.source_kind === 'goal' && sess.source_id ? sess.source_id : undefined,
           ),
         },
       };

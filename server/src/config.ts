@@ -41,6 +41,9 @@ export interface Config {
    *  the old hard-coded 30 days to bound the window a captured cookie stays valid.
    *  Optional so partial test fixtures stay valid; AuthSessions defaults otherwise. */
   sessionTtlMs?: number;
+  /** Turn ceiling for a goal pass (DECK_GOAL_MAX_TURNS, default 150). A goal does
+   *  more than a task, so it gets a higher cap than the task default of 40. */
+  goalMaxTurns?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -117,5 +120,9 @@ export function loadConfig(
         ? Math.max(1, Number(env.DECK_SESSION_TTL_DAYS))
         : 7) *
       24 * 60 * 60 * 1000,
+    goalMaxTurns:
+      env.DECK_GOAL_MAX_TURNS && Number.isFinite(Number(env.DECK_GOAL_MAX_TURNS))
+        ? Math.max(1, Number(env.DECK_GOAL_MAX_TURNS))
+        : 150,
   };
 }

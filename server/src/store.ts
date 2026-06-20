@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 export type SessionStatus = 'idle' | 'active' | 'errored';
 export type SessionKind = 'chat' | 'task';
-export type SessionOrigin = 'manual' | 'cron' | 'ticket';
+export type SessionOrigin = 'manual' | 'cron' | 'ticket' | 'goal';
 
 export interface SessionRow {
   id: string;
@@ -21,6 +21,7 @@ export interface SessionRow {
   disabled_tools: string | null;
   source_kind?: string | null;
   source_id?: string | null;
+  cwd?: string | null;
   ended_at?: number | null;
   result?: string | null;
   created_at: number;
@@ -46,6 +47,14 @@ export interface CronRow {
   created_at: number;
 }
 
+/** Coerce a cron row's prompt to a string. Legacy rows can hold the prompt as a
+ *  BLOB, which better-sqlite3 returns as a Buffer and JSON-serializes to
+ *  `{type:"Buffer",data:[...]}` — an object the React client can't render. */
+function normalizeCronRow(r: CronRow): CronRow {
+  if (Buffer.isBuffer(r.prompt)) r.prompt = (r.prompt as Buffer).toString('utf8');
+  return r;
+}
+
 export interface TicketRow {
   id: string;
   title: string;
@@ -54,6 +63,20 @@ export interface TicketRow {
   project_path: string;
   session_id: string | null;
   pr_url: string | null;
+  created_at: number;
+}
+
+export interface GoalRow {
+  id: string;
+  project_path: string;
+  title: string;
+  expected_output: string;
+  acceptance: string | null;
+  status: 'queued' | 'building' | 'review' | 'failed' | 'cancelled';
+  branch: string | null;
+  worktree_path: string | null;
+  session_id: string | null;
+  report: string | null;
   created_at: number;
 }
 
@@ -118,6 +141,11 @@ export class Store {
     listTickets: Database.Statement;
     listTicketsByProject: Database.Statement;
     deleteTicket: Database.Statement;
+    insertGoal: Database.Statement;
+    getGoal: Database.Statement;
+    listGoals: Database.Statement;
+    listGoalsByProject: Database.Statement;
+    deleteGoal: Database.Statement;
     finishRun: Database.Statement;
     listRunsForSource: Database.Statement;
   };
@@ -170,6 +198,7 @@ export class Store {
       ['source_id', `ALTER TABLE session ADD COLUMN source_id TEXT`],
       ['ended_at', `ALTER TABLE session ADD COLUMN ended_at INTEGER`],
       ['result', `ALTER TABLE session ADD COLUMN result TEXT`],
+      ['cwd', `ALTER TABLE session ADD COLUMN cwd TEXT`],
     ];
     for (const [name, sql] of additions) {
       if (!existing.has(name)) this.db.exec(sql);
@@ -186,6 +215,14 @@ export class Store {
         project_path TEXT NOT NULL, session_id TEXT, pr_url TEXT, created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_ticket_project ON ticket(project_path);
+      CREATE TABLE IF NOT EXISTS goal (
+        id TEXT PRIMARY KEY, project_path TEXT NOT NULL, title TEXT NOT NULL,
+        expected_output TEXT NOT NULL, acceptance TEXT,
+        status TEXT NOT NULL DEFAULT 'queued',
+        branch TEXT, worktree_path TEXT, session_id TEXT, report TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_goal_project ON goal(project_path);
     `);
   }
 
@@ -197,8 +234,8 @@ export class Store {
          VALUES (?, ?, ?, NULL, 'idle', 'chat', NULL, 'manual', ?, ?, ?, ?)`,
       ),
       insertTask: db.prepare(
-        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, source_kind, source_id, created_at)
-         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO session (id, project_path, title, sdk_session_id, status, kind, prompt, origin, model, effort, disabled_tools, source_kind, source_id, cwd, created_at)
+         VALUES (?, ?, ?, NULL, 'idle', 'task', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ),
       getSession: db.prepare(`SELECT * FROM session WHERE id = ?`),
       listAll: db.prepare(`SELECT * FROM session ORDER BY created_at DESC, rowid DESC`),
@@ -238,6 +275,14 @@ export class Store {
       listTickets: db.prepare(`SELECT * FROM ticket ORDER BY created_at DESC`),
       listTicketsByProject: db.prepare(`SELECT * FROM ticket WHERE project_path = ? ORDER BY created_at DESC`),
       deleteTicket: db.prepare(`DELETE FROM ticket WHERE id = ?`),
+      insertGoal: db.prepare(
+        `INSERT INTO goal (id, project_path, title, expected_output, acceptance, status, branch, worktree_path, session_id, report, created_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, NULL, ?)`,
+      ),
+      getGoal: db.prepare(`SELECT * FROM goal WHERE id = ?`),
+      listGoals: db.prepare(`SELECT * FROM goal ORDER BY created_at DESC, rowid DESC`),
+      listGoalsByProject: db.prepare(`SELECT * FROM goal WHERE project_path = ? ORDER BY created_at DESC, rowid DESC`),
+      deleteGoal: db.prepare(`DELETE FROM goal WHERE id = ?`),
       finishRun: db.prepare(`UPDATE session SET ended_at = ?, result = ? WHERE id = ?`),
       listRunsForSource: db.prepare(
         `SELECT * FROM session WHERE source_kind = ? AND source_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
@@ -291,12 +336,13 @@ export class Store {
     projectPath: string;
     prompt: string;
     origin: SessionOrigin;
-    title?: string;
+    title?: string | null;
     model?: string;
     effort?: string;
     disabledTools?: string[];
-    sourceKind?: 'cron' | 'ticket';
+    sourceKind?: 'cron' | 'ticket' | 'goal';
     sourceId?: string;
+    cwd?: string;
   }): SessionRow {
     const id = randomUUID();
     const created_at = Date.now();
@@ -311,6 +357,7 @@ export class Store {
       input.disabledTools && input.disabledTools.length ? JSON.stringify(input.disabledTools) : null,
       input.sourceKind ?? null,
       input.sourceId ?? null,
+      input.cwd ?? null,
       created_at,
     );
     return this.get(id)!;
@@ -320,7 +367,7 @@ export class Store {
     this.stmts.finishRun.run(Date.now(), result, id);
   }
 
-  listRunsForSource(sourceKind: 'cron' | 'ticket', sourceId: string, limit = 20): SessionRow[] {
+  listRunsForSource(sourceKind: 'cron' | 'ticket' | 'goal', sourceId: string, limit = 20): SessionRow[] {
     return this.stmts.listRunsForSource.all(sourceKind, sourceId, limit) as SessionRow[];
   }
 
@@ -370,20 +417,23 @@ export class Store {
 
   createCron(i: { schedule: string; projectPath: string; prompt: string }): CronRow {
     const id = randomUUID();
-    this.stmts.insertCron.run(id, i.schedule, i.projectPath, i.prompt, Date.now());
+    // Force TEXT affinity: a Buffer/non-string prompt would bind as a BLOB and
+    // later serialize to `{type:"Buffer",data:[...]}`, crashing the React client.
+    this.stmts.insertCron.run(id, i.schedule, i.projectPath, String(i.prompt), Date.now());
     return this.getCron(id)!;
   }
 
   getCron(id: string): CronRow | undefined {
-    return this.stmts.getCron.get(id) as CronRow | undefined;
+    const r = this.stmts.getCron.get(id) as CronRow | undefined;
+    return r ? normalizeCronRow(r) : r;
   }
 
   listCron(): CronRow[] {
-    return this.stmts.listCron.all() as CronRow[];
+    return (this.stmts.listCron.all() as CronRow[]).map(normalizeCronRow);
   }
 
   listEnabledCron(): CronRow[] {
-    return this.stmts.listEnabledCron.all() as CronRow[];
+    return (this.stmts.listEnabledCron.all() as CronRow[]).map(normalizeCronRow);
   }
 
   setCronEnabled(id: string, on: boolean): void {
@@ -398,7 +448,8 @@ export class Store {
     for (const k of ['schedule', 'prompt'] as const) {
       if (p[k] !== undefined) {
         sets.push(`${k} = ?`);
-        vals.push(p[k]);
+        // String() guards against a Buffer/non-string binding as a BLOB.
+        vals.push(String(p[k]));
       }
     }
     if (!sets.length) return;
@@ -457,5 +508,44 @@ export class Store {
 
   deleteTicket(id: string): void {
     this.stmts.deleteTicket.run(id);
+  }
+
+  createGoal(i: { projectPath: string; title: string; expectedOutput: string; acceptance?: string }): GoalRow {
+    const id = randomUUID();
+    this.stmts.insertGoal.run(id, i.projectPath, i.title, i.expectedOutput, i.acceptance ?? null, Date.now());
+    return this.getGoal(id)!;
+  }
+
+  getGoal(id: string): GoalRow | undefined {
+    return this.stmts.getGoal.get(id) as GoalRow | undefined;
+  }
+
+  listGoals(): GoalRow[] {
+    return this.stmts.listGoals.all() as GoalRow[];
+  }
+
+  listGoalsByProject(projectPath: string): GoalRow[] {
+    return this.stmts.listGoalsByProject.all(projectPath) as GoalRow[];
+  }
+
+  updateGoal(
+    id: string,
+    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report'>>,
+  ): void {
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report'] as const) {
+      if (p[k] !== undefined) {
+        sets.push(`${k} = ?`);
+        vals.push(p[k]);
+      }
+    }
+    if (!sets.length) return;
+    vals.push(id);
+    this.db.prepare(`UPDATE goal SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  }
+
+  deleteGoal(id: string): void {
+    this.stmts.deleteGoal.run(id);
   }
 }

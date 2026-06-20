@@ -129,3 +129,52 @@ export function useCancelTask() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }
+
+export function useGoals() {
+  return useQuery({
+    queryKey: ["goals"],
+    queryFn: () => api.goals(),
+    refetchInterval: (q) => (q.state.data?.some((g) => g.status === "building") ? 3000 : false),
+  });
+}
+
+export function useGoal(id: string | null) {
+  return useQuery({
+    queryKey: ["goals", id],
+    queryFn: () => (id ? api.goal(id) : Promise.resolve(null)),
+    enabled: !!id,
+    refetchInterval: (q) => (q.state.data?.status === "building" ? 3000 : false),
+  });
+}
+
+export function useCreateGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { project: string; title: string; expected_output: string; acceptance?: string }) => api.createGoal(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+  });
+}
+
+export function useRunGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.runGoal(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+  });
+}
+
+export function useCancelGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.cancelGoal(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+  });
+}
+
+export function useDeleteGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteGoal(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+  });
+}

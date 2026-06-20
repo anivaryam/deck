@@ -29,16 +29,33 @@ export async function linkPrHandler(
   return { content: [{ type: 'text', text: `PR linked to ticket ${ticketId}: ${args.url}` }] };
 }
 
+export interface GoalReportArgs {
+  summary: string;
+  goal_met: boolean;
+  files_changed: string[];
+  commands_run: { cmd: string; exit_code: number; output_tail: string }[];
+  incomplete: string[];
+  notes?: string;
+}
+
+export async function goalReportHandler(
+  store: Store, goalId: string, args: GoalReportArgs,
+): Promise<ToolResult> {
+  store.updateGoal(goalId, { report: JSON.stringify(args) });
+  return { content: [{ type: 'text', text: `Report recorded for goal ${goalId}.` }] };
+}
+
 /** Returns the list of tool names registered for the given context.
  *  Pure helper — usable in tests without constructing an MCP server. */
-export function deckToolNames(ticketId?: string): string[] {
+export function deckToolNames(ticketId?: string, goalId?: string): string[] {
   const names = ['create_ticket', 'list_tickets'];
   if (ticketId) names.push('link_pr');
+  if (goalId) names.push('goal_report');
   return names;
 }
 
 /** In-process MCP server ("deck"), tools bound to one project. */
-export function buildDeckMcp(store: Store, projectPath: string, ticketId?: string) {
+export function buildDeckMcp(store: Store, projectPath: string, ticketId?: string, goalId?: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: SdkMcpToolDefinition<any>[] = [
     tool(
@@ -61,6 +78,25 @@ export function buildDeckMcp(store: Store, projectPath: string, ticketId?: strin
         'Record the GitHub Pull Request URL you opened for the CURRENT ticket. Call this once the PR exists.',
         { url: z.string().describe('Full GitHub PR URL, e.g. https://github.com/o/r/pull/123') },
         async (args) => linkPrHandler(store, ticketId, args),
+      ),
+    );
+  }
+  if (goalId) {
+    tools.push(
+      tool(
+        'goal_report',
+        'Record the FINAL structured outcome for the current goal. Call this exactly once when finished or blocked.',
+        {
+          summary: z.string().describe('What you built / attempted'),
+          goal_met: z.boolean().describe('Your honest claim: does the result meet the goal?'),
+          files_changed: z.array(z.string()).describe('Paths changed'),
+          commands_run: z
+            .array(z.object({ cmd: z.string(), exit_code: z.number(), output_tail: z.string() }))
+            .describe('Commands/tests run with their results'),
+          incomplete: z.array(z.string()).describe('Anything still not done'),
+          notes: z.string().optional(),
+        },
+        async (args) => goalReportHandler(store, goalId, args as GoalReportArgs),
       ),
     );
   }

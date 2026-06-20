@@ -15,6 +15,7 @@ import { registerRoutes } from './routes.ts';
 import { registerWs } from './wsHub.ts';
 import { AuthSessions } from './auth.ts';
 import { registerTicketAutomation } from './ticketAutomation.ts';
+import { SinglePassExecutor, registerGoalAutomation } from './goalRunner.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +25,10 @@ async function main() {
   const manager = new SessionManager(store, config);
   registerTicketAutomation(manager, store);
   const taskRunner = new TaskRunner(store, manager, 6, { model: config.taskModel, effort: config.taskEffort });
+  const dbPath = process.env.DECK_DB || 'claude-deck.sqlite';
+  const worktreesDir = process.env.DECK_GOALS_DIR || path.join(path.dirname(path.resolve(dbPath)), 'deck-goal-worktrees');
+  const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir);
+  registerGoalAutomation(manager, store);
   const scheduler = new Scheduler(store, taskRunner);
   const auth = new AuthSessions(config.sessionTtlMs);
 
@@ -38,7 +43,7 @@ async function main() {
   await app.register(websocket);
 
   const ws = registerWs(app, { store, manager, config, auth });
-  registerRoutes(app, { store, config, taskRunner, scheduler, auth, manager, closeRoom: ws.closeRoom });
+  registerRoutes(app, { store, config, taskRunner, scheduler, auth, manager, closeRoom: ws.closeRoom, goalExecutor });
 
   // Serve the built SPA if present (production single-port mode)
   const webDist = path.resolve(__dirname, '../../web/dist');

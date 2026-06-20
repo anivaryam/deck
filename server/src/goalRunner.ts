@@ -31,6 +31,19 @@ function goalPrompt(goalId: string, expected: string, acceptance: string | null)
   ].join('\n');
 }
 
+function retryPrompt(goalId: string, attempt: number, maxAttempts: number, expected: string, acceptance: string | null, priorVerdict: { reasons?: string; unmet_criteria?: string[] } | null): string {
+  const reasons = priorVerdict?.reasons ?? 'verification did not confirm the goal was met';
+  const unmet = priorVerdict?.unmet_criteria?.length ? priorVerdict.unmet_criteria.join('; ') : 'none listed';
+  return [
+    `This is attempt ${attempt} of ${maxAttempts} for the goal below. A previous attempt FAILED verification. The judge's verdict was: ${reasons}. Unmet criteria: ${unmet}. Start fresh on the branch \`goal/${goalId}\` and FIX these specifically — do not repeat the same mistakes. Do NOT merge.`,
+    '',
+    `Goal (expected output): ${expected}`,
+    `Acceptance criteria: ${acceptance && acceptance.trim() ? acceptance : 'none stated'}`,
+    '',
+    "Plan first, then implement in focused changes, then run the project's tests and confirm they pass. When finished — or if blocked — call the `goal_report` tool with an honest structured outcome.",
+  ].join('\n');
+}
+
 function verifyPrompt(goalId: string, expected: string, acceptance: string | null): string {
   return [
     `A previous agent attempted to achieve the goal below on the CURRENT branch (\`goal/${goalId}\`). Independently and SKEPTICALLY verify whether the goal is genuinely met. Do NOT trust the prior agent's claims. Review the changes (\`git diff\`), run the project's tests yourself, and check each acceptance criterion.`,
@@ -67,12 +80,17 @@ export class SinglePassExecutor implements GoalExecutor {
       return;
     }
     this.store.updateGoal(goalId, { status: 'building', branch, worktree_path: worktreePath, verdict: null, report: null });
+    let priorVerdict: { reasons?: string; unmet_criteria?: string[] } | null = null;
+    try { priorVerdict = g.verdict ? JSON.parse(g.verdict) : null; } catch { priorVerdict = null; }
+    const prompt = g.iteration > 0
+      ? retryPrompt(goalId, g.iteration + 1, g.max_iterations, g.expected_output, g.acceptance, priorVerdict)
+      : goalPrompt(goalId, g.expected_output, g.acceptance);
     let sessionId: string;
     try {
       sessionId = this.runner.run({
         projectPath: g.project_path,
         cwd: worktreePath,
-        prompt: goalPrompt(goalId, g.expected_output, g.acceptance),
+        prompt,
         origin: 'goal',
         title: g.title,
         sourceKind: 'goal',
@@ -118,7 +136,7 @@ export class SinglePassExecutor implements GoalExecutor {
 export function registerGoalAutomation(
   manager: Pick<SessionManager, 'on'>,
   store: Store,
-  verifier: { startVerification(goalId: string): void },
+  verifier: { start(goalId: string): void; startVerification(goalId: string): void },
 ): void {
   manager.on('task', (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
     try {
@@ -135,6 +153,8 @@ export function registerGoalAutomation(
         }
       };
 
+      if (g.status === 'cancelled') { cleanup(); return; }
+
       if (kind === 'goal') {
         if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
         if (frame.result === 'success' && g.report) {
@@ -149,7 +169,14 @@ export function registerGoalAutomation(
       if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
       let verdict: { achieved?: boolean } | null = null;
       try { verdict = g.verdict ? JSON.parse(g.verdict) : null; } catch { verdict = null; }
-      store.updateGoal(g.id, { status: verdict?.achieved === true ? 'achieved' : 'review' });
+      if (verdict?.achieved === true) { store.updateGoal(g.id, { status: 'achieved' }); cleanup(); return; }
+      // not achieved — retry if attempts remain, else park at review
+      if (g.iteration + 1 < g.max_iterations) {
+        store.updateGoal(g.id, { iteration: g.iteration + 1 });
+        verifier.start(g.id); // fresh build (manages its own worktree)
+        return;
+      }
+      store.updateGoal(g.id, { status: 'review' });
       cleanup();
     } catch (err) {
       console.error('[goalAutomation] frame handling failed:', err instanceof Error ? err.message : err);

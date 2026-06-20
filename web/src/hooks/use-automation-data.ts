@@ -153,7 +153,7 @@ export function useGoal(id: string | null) {
 export function useCreateGoal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { project: string; title: string; expected_output: string; acceptance?: string }) => api.createGoal(body),
+    mutationFn: (body: { project: string; title: string; expected_output: string; acceptance?: string; max_iterations?: number }) => api.createGoal(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
   });
 }

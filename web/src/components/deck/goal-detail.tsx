@@ -38,6 +38,8 @@ export function GoalDetail({ goal, onDeleted }: { goal: Goal; onDeleted?: () => 
       <div className="flex-1 overflow-y-auto p-4 text-xs text-muted-foreground">
         <p className="mb-3 whitespace-pre-wrap leading-relaxed">{goal.expected_output}</p>
         {goal.branch && <div className="mb-3 font-mono text-[11px]">branch: <span className="text-foreground">{goal.branch}</span></div>}
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">attempt</div>
+        <div className="mb-3 text-[11px]">{Math.min(goal.iteration + 1, goal.max_iterations)} / {goal.max_iterations}</div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">created</div>
         <div className="mb-3 text-[11px]">{relativeTime(goal.created_at)}</div>
         {verdict && (

@@ -44,6 +44,8 @@ export interface Config {
   /** Turn ceiling for a goal pass (DECK_GOAL_MAX_TURNS, default 150). A goal does
    *  more than a task, so it gets a higher cap than the task default of 40. */
   goalMaxTurns?: number;
+  /** Default attempt cap for a goal's autonomous loop (DECK_GOAL_MAX_ITERATIONS, default 3, min 1). */
+  goalMaxIterations?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -124,5 +126,9 @@ export function loadConfig(
       env.DECK_GOAL_MAX_TURNS && Number.isFinite(Number(env.DECK_GOAL_MAX_TURNS))
         ? Math.max(1, Number(env.DECK_GOAL_MAX_TURNS))
         : 150,
+    goalMaxIterations:
+      env.DECK_GOAL_MAX_ITERATIONS && Number.isFinite(Number(env.DECK_GOAL_MAX_ITERATIONS))
+        ? Math.max(1, Math.floor(Number(env.DECK_GOAL_MAX_ITERATIONS)))
+        : 3,
   };
 }

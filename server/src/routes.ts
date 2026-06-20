@@ -383,10 +383,10 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
 
   // goals
   app.get('/api/goals', async () => store.listGoals());
-  app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string } }>(
+  app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string; max_iterations?: number } }>(
     '/api/goals',
     async (req, reply) => {
-      const { title, expected_output, acceptance, project } = req.body ?? {};
+      const { title, expected_output, acceptance, project, max_iterations } = req.body ?? {};
       if (!title || !title.trim() || !expected_output || !expected_output.trim() || !project) {
         return reply.code(400).send({ error: 'title, expected_output and project required' });
       }
@@ -396,7 +396,10 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       } catch (e) {
         return reply.code(400).send({ error: e instanceof Error ? e.message : 'invalid project' });
       }
-      return store.createGoal({ projectPath, title, expectedOutput: expected_output, acceptance });
+      const maxIterations = Number.isFinite(Number(max_iterations)) && Number(max_iterations) > 0
+        ? Math.floor(Number(max_iterations))
+        : (config.goalMaxIterations ?? 3);
+      return store.createGoal({ projectPath, title, expectedOutput: expected_output, acceptance, maxIterations });
     },
   );
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/goals/:id', async (req, reply) => {
@@ -409,6 +412,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const g = store.getGoal(req.params.id);
     if (!g) return reply.code(404).send({ error: 'not found' });
     if (g.status === 'building' || g.status === 'verifying') return reply.code(409).send({ error: 'goal is already in progress' });
+    store.updateGoal(g.id, { iteration: 0 });
     goalExecutor?.start(g.id);
     return store.getGoal(g.id);
   });
@@ -416,7 +420,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const g = store.getGoal(req.params.id);
     if (!g) return reply.code(404).send({ error: 'not found' });
     if (g.session_id) manager?.cancel(g.session_id);
-    else if (g.status === 'queued' || g.status === 'building') store.updateGoal(g.id, { status: 'cancelled' });
+    if (g.status === 'queued' || g.status === 'building' || g.status === 'verifying') {
+      store.updateGoal(g.id, { status: 'cancelled' });
+    }
     return { cancelled: true };
   });
   app.delete<{ Params: { id: string } }>('/api/goals/:id', async (req, reply) => {

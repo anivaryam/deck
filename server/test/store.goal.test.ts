@@ -48,4 +48,14 @@ describe('Store goals', () => {
     expect(got.status).toBe('achieved');
     expect(JSON.parse(got.verdict!).achieved).toBe(true);
   });
+
+  it('stores max_iterations (default 3) and a 0 iteration; updates iteration', () => {
+    const a = store.createGoal({ projectPath: '/p', title: 'A', expectedOutput: 'x' });
+    expect(store.getGoal(a.id)!.max_iterations).toBe(3);
+    expect(store.getGoal(a.id)!.iteration).toBe(0);
+    const b = store.createGoal({ projectPath: '/p', title: 'B', expectedOutput: 'x', maxIterations: 5 });
+    expect(store.getGoal(b.id)!.max_iterations).toBe(5);
+    store.updateGoal(a.id, { iteration: 2 });
+    expect(store.getGoal(a.id)!.iteration).toBe(2);
+  });
 });

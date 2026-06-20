@@ -142,6 +142,8 @@ export interface Goal {
   session_id: string | null;
   report: string | null;
   verdict: string | null;
+  max_iterations: number;
+  iteration: number;
   created_at: number;
 }
 

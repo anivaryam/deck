@@ -78,6 +78,8 @@ export interface GoalRow {
   session_id: string | null;
   report: string | null;
   verdict: string | null;
+  max_iterations: number;
+  iteration: number;
   created_at: number;
 }
 
@@ -221,6 +223,8 @@ export class Store {
         expected_output TEXT NOT NULL, acceptance TEXT,
         status TEXT NOT NULL DEFAULT 'queued',
         branch TEXT, worktree_path TEXT, session_id TEXT, report TEXT, verdict TEXT,
+        max_iterations INTEGER NOT NULL DEFAULT 3,
+        iteration INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_goal_project ON goal(project_path);
@@ -230,6 +234,8 @@ export class Store {
       (this.db.prepare(`PRAGMA table_info(goal)`).all() as Array<{ name: string }>).map((c) => c.name),
     );
     if (!goalCols.has('verdict')) this.db.exec(`ALTER TABLE goal ADD COLUMN verdict TEXT`);
+    if (!goalCols.has('max_iterations')) this.db.exec(`ALTER TABLE goal ADD COLUMN max_iterations INTEGER NOT NULL DEFAULT 3`);
+    if (!goalCols.has('iteration')) this.db.exec(`ALTER TABLE goal ADD COLUMN iteration INTEGER NOT NULL DEFAULT 0`);
   }
 
   private prepareStatements(): void {
@@ -282,8 +288,8 @@ export class Store {
       listTicketsByProject: db.prepare(`SELECT * FROM ticket WHERE project_path = ? ORDER BY created_at DESC`),
       deleteTicket: db.prepare(`DELETE FROM ticket WHERE id = ?`),
       insertGoal: db.prepare(
-        `INSERT INTO goal (id, project_path, title, expected_output, acceptance, status, branch, worktree_path, session_id, report, created_at)
-         VALUES (?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, NULL, ?)`,
+        `INSERT INTO goal (id, project_path, title, expected_output, acceptance, status, branch, worktree_path, session_id, report, max_iterations, created_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, NULL, ?, ?)`,
       ),
       getGoal: db.prepare(`SELECT * FROM goal WHERE id = ?`),
       listGoals: db.prepare(`SELECT * FROM goal ORDER BY created_at DESC, rowid DESC`),
@@ -516,9 +522,10 @@ export class Store {
     this.stmts.deleteTicket.run(id);
   }
 
-  createGoal(i: { projectPath: string; title: string; expectedOutput: string; acceptance?: string }): GoalRow {
+  createGoal(i: { projectPath: string; title: string; expectedOutput: string; acceptance?: string; maxIterations?: number }): GoalRow {
     const id = randomUUID();
-    this.stmts.insertGoal.run(id, i.projectPath, i.title, i.expectedOutput, i.acceptance ?? null, Date.now());
+    const maxIterations = Math.max(1, Math.floor(i.maxIterations ?? 3));
+    this.stmts.insertGoal.run(id, i.projectPath, i.title, i.expectedOutput, i.acceptance ?? null, maxIterations, Date.now());
     return this.getGoal(id)!;
   }
 
@@ -536,11 +543,11 @@ export class Store {
 
   updateGoal(
     id: string,
-    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report' | 'verdict'>>,
+    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report' | 'verdict' | 'iteration'>>,
   ): void {
     const sets: string[] = [];
     const vals: unknown[] = [];
-    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report', 'verdict'] as const) {
+    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report', 'verdict', 'iteration'] as const) {
       if (p[k] !== undefined) {
         sets.push(`${k} = ?`);
         vals.push(p[k]);

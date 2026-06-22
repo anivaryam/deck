@@ -130,6 +130,10 @@ export function useCancelTask() {
   });
 }
 
+export function useKnowledge() {
+  return useQuery({ queryKey: ["knowledge"], queryFn: () => api.knowledge() });
+}
+
 export function useGoals() {
   return useQuery({
     queryKey: ["goals"],

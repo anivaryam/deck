@@ -1,4 +1,4 @@
-import type { Cron, Goal, GoalDetail, Project, Session, Ticket, TaskDetail } from "./types";
+import type { Cron, Goal, GoalDetail, Knowledge, Project, Session, Ticket, TaskDetail } from "./types";
 
 /** Error carrying the HTTP status so callers can branch on it (e.g. 401 → login)
  *  instead of regex-matching the message. */
@@ -262,5 +262,10 @@ export const api = {
   },
   async deleteGoal(id: string): Promise<void> {
     return ok(await fetch(`/api/goals/${id}`, { method: "DELETE", credentials: "same-origin" }));
+  },
+
+  // ---- knowledge ----
+  async knowledge(): Promise<Knowledge[]> {
+    return json(await fetch("/api/knowledge", { credentials: "same-origin" }));
   },
 };

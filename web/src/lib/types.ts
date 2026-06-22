@@ -152,3 +152,14 @@ export interface Goal {
 export interface GoalDetail extends Goal {
   events: DeckMessage[];
 }
+
+export interface Knowledge {
+  id: number;
+  scope: string; // 'global' | <project_path>
+  kind: "binding" | "convention" | "rule" | "preference" | "infra";
+  key: string | null;
+  fact: string;
+  source_session: string | null;
+  created_at: number;
+  updated_at: number;
+}

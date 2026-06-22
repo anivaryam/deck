@@ -1,6 +1,38 @@
 import { describe, it, expect } from "vitest";
-import { eventsToMessages, createIncrementalFolder } from "./adapt";
+import { eventsToMessages, createIncrementalFolder, sanitizeAssistantText } from "./adapt";
 import type { DeckMessage } from "./types";
+
+describe("sanitizeAssistantText", () => {
+  it("leaves ordinary prose untouched", () => {
+    const s = "Here's the fix. It mentions a reminder and a mode, casually.";
+    expect(sanitizeAssistantText(s)).toBe(s);
+  });
+
+  it("strips a whole <system-reminder> block", () => {
+    const s = "Done.\n<system-reminder>\nPlan mode is active. You MUST NOT...\n</system-reminder>";
+    expect(sanitizeAssistantText(s)).toBe("Done.");
+  });
+
+  it("drops everything up to an orphan close tag (truncated opening)", () => {
+    const s = "...silent-failure-hunter, type-design-analyzer.\nThe user opened the conversation with the greeting: hi.</system-reminder>\nReal answer here.";
+    expect(sanitizeAssistantText(s)).toBe("Real answer here.");
+  });
+
+  it("strips injected SessionStart banner lines", () => {
+    const s = "PONYTAIL MODE ACTIVE — answers must follow the ladder.\nActual reply.";
+    expect(sanitizeAssistantText(s)).toBe("Actual reply.");
+  });
+
+  it("strips the echoed harness post-prompt instruction", () => {
+    const s = "Respond to the user's prompt. When you are done, call the remember tool.\nThe answer.";
+    expect(sanitizeAssistantText(s)).toBe("The answer.");
+  });
+
+  it("collapses a full leak to empty so it is not rendered", () => {
+    const s = "PONYTAIL MODE ACTIVE — stay lazy.\n<system-reminder>\nPlan mode is active.\n</system-reminder>";
+    expect(sanitizeAssistantText(s).trim()).toBe("");
+  });
+});
 
 function ev(seq: number, type: string, payload: any): DeckMessage {
   return { seq, type, payload } as DeckMessage;

@@ -329,6 +329,12 @@ export class SessionManager extends EventEmitter {
           append: ARTIFACT_SYSTEM_PROMPT + CAPTURE_RULE + AGENT_TUNING + formatMemoryBlock(this.store.loadScopedFacts(sess.project_path)),
         },
         permissionMode: mode,
+        // Load the TARGET project's own config (its instruction file + project
+        // skills/hooks/MCP) but NOT the operator's global config by default.
+        // Global SessionStart hooks (output-style/workflow personalities) bloat
+        // context and leak into replies; they're tuned for the operator's own
+        // terminal, not a headless project agent. Override with DECK_SETTING_SOURCES.
+        settingSources: this.cfg.settingSources ?? ['project', 'local'],
         abortController: ac,
         ...(maxTurns ? { maxTurns } : {}),
         // Effort: an explicit per-session value wins; otherwise interactive chat

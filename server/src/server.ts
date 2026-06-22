@@ -10,6 +10,7 @@ import fastifyStatic from '@fastify/static';
 import { loadConfig } from './config.ts';
 import { Store } from './store.ts';
 import { SessionManager } from './sessionManager.ts';
+import { MemoryMiner } from './memoryMiner.ts';
 import { TaskRunner } from './taskRunner.ts';
 import { Scheduler } from './scheduler.ts';
 import { registerRoutes } from './routes.ts';
@@ -23,7 +24,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function main() {
   const config = loadConfig(); // throws + exits non-zero if misconfigured
   const store = new Store(process.env.DECK_DB || 'claude-deck.sqlite');
-  const manager = new SessionManager(store, config);
+  const miner = new MemoryMiner(store, config);
+  const manager = new SessionManager(store, config, undefined, miner);
   const disposeTicketAutomation = registerTicketAutomation(manager, store);
   const taskRunner = new TaskRunner(store, manager, 6, { model: config.taskModel, effort: config.taskEffort });
   // Goal worktrees live OUTSIDE any project (never nested in deck or the target

@@ -4,6 +4,7 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Config } from './config.ts';
 import type { Store, SessionRow, KnowledgeRow } from './store.ts';
 import { buildDeckMcp } from './deckTools.ts';
+import type { MemoryMiner } from './memoryMiner.ts';
 
 /**
  * Injected into every session's system prompt so Claude knows how to deliver
@@ -28,7 +29,9 @@ Prefer actually showing artifacts this way over only describing them.`;
 const CAPTURE_RULE = `
 
 ## Learning across sessions
-You can remember durable facts for future sessions with the \`remember\` tool, and look up facts learned in other projects with \`recall\`. Call \`remember\` PROACTIVELY (the user does not have to ask) the moment you learn something that is durable, not derivable from the repo/git/CLAUDE.md, and would change how a future session acts — e.g. which GitHub/MCP/cloud account this project uses, a build/PR/commit convention, a do/don't rule, or a standing user preference (clear error messages, always show loading/empty/error states, terse output). Use scope=project for facts about this project; scope=global for cross-project user preferences. NEVER store secrets — store the reference (account name), never the token. Use \`forget\` to drop a wrong fact.`;
+You can remember durable facts for future sessions with the \`remember\` tool, and look up facts learned in other projects with \`recall\`. Call \`remember\` PROACTIVELY (the user does not have to ask) the moment you learn something that is durable, not derivable from the repo/git/CLAUDE.md, and would change how a future session acts — e.g. which GitHub/MCP/cloud account this project uses, a build/PR/commit convention, a do/don't rule, or a standing user preference (clear error messages, always show loading/empty/error states, terse output). Use scope=project for facts about this project; scope=global for cross-project user preferences. NEVER store secrets — store the reference (account name), never the token. Use \`forget\` to drop a wrong fact.
+
+When in doubt about a durable, project-specific fact — an account, a convention, a rule, a stated preference — record it. A missed fact is a missed chance to be smarter next session.`;
 
 /** Render scoped facts as a system-prompt block. Returns '' when there are none
  *  so an empty store injects no stray header. */
@@ -74,6 +77,7 @@ export class SessionManager extends EventEmitter {
     private store: Store,
     private cfg: Config,
     private queryFn: QueryFn = (args) => sdkQuery(args as any),
+    private miner?: MemoryMiner,
   ) {
     super();
   }
@@ -215,6 +219,9 @@ export class SessionManager extends EventEmitter {
         this.store.finishRun(sessionId, 'success');
         this.emitTask(sess, 'idle', 'success');
       }
+      // Auto-mine durable facts from this turn into memory. Fire-and-forget —
+      // mining must never block or break a turn.
+      void this.miner?.mineSession(sessionId).catch(() => {});
     } catch (err) {
       if (ac.signal.aborted) {
         this.record(sessionId, 'cancelled', { message: 'cancelled by user' });

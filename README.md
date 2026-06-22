@@ -1,4 +1,4 @@
-# deck
+# deck - Trying out claude:)
 
 A terminal-aesthetic web frontend for the Claude Agent SDK — the design-frozen
 "claude-deck" UI (phosphor-green terminal theme, JetBrains Mono, 3-pane layout)

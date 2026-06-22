@@ -8,6 +8,19 @@ export type SessionStatus = 'idle' | 'active' | 'errored';
 export type SessionKind = 'chat' | 'task';
 export type SessionOrigin = 'manual' | 'cron' | 'ticket' | 'goal';
 
+export type KnowledgeKind = 'binding' | 'convention' | 'rule' | 'preference' | 'infra';
+
+export interface KnowledgeRow {
+  id: number;
+  scope: string;            // 'global' | <project_path>
+  kind: KnowledgeKind;
+  key: string | null;       // natural key for supersede; NULL = free-form
+  fact: string;
+  source_session: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface SessionRow {
   id: string;
   project_path: string;
@@ -154,6 +167,12 @@ export class Store {
     deleteGoal: Database.Statement;
     finishRun: Database.Statement;
     listRunsForSource: Database.Statement;
+    upsertKnowledge: Database.Statement;
+    deleteKnowledge: Database.Statement;
+    loadScopedKnowledge: Database.Statement;
+    getKnowledgeByKey: Database.Statement;
+    getKnowledgeById: Database.Statement;
+    searchKnowledge: Database.Statement;
   };
   // Compiled once, like the prepared statements above — atomic session delete
   // (events first, then the row).
@@ -250,6 +269,36 @@ export class Store {
     if (!goalCols.has('max_iterations')) this.db.exec(`ALTER TABLE goal ADD COLUMN max_iterations INTEGER NOT NULL DEFAULT 3`);
     if (!goalCols.has('iteration')) this.db.exec(`ALTER TABLE goal ADD COLUMN iteration INTEGER NOT NULL DEFAULT 0`);
     if (!goalCols.has('qa_dimensions')) this.db.exec(`ALTER TABLE goal ADD COLUMN qa_dimensions TEXT NOT NULL DEFAULT '[]'`);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS knowledge (
+        id INTEGER PRIMARY KEY,
+        scope TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        key TEXT,
+        fact TEXT NOT NULL,
+        source_session TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      -- Partial unique index: supersede only applies to keyed facts. NULL keys are
+      -- free-form and must be allowed to coexist.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_scope_key
+        ON knowledge(scope, key) WHERE key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_knowledge_scope ON knowledge(scope);
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts
+        USING fts5(fact, content='knowledge', content_rowid='id');
+      CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge BEGIN
+        INSERT INTO knowledge_fts(rowid, fact) VALUES (new.id, new.fact);
+      END;
+      CREATE TRIGGER IF NOT EXISTS knowledge_ad AFTER DELETE ON knowledge BEGIN
+        INSERT INTO knowledge_fts(knowledge_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
+      END;
+      CREATE TRIGGER IF NOT EXISTS knowledge_au AFTER UPDATE ON knowledge BEGIN
+        INSERT INTO knowledge_fts(knowledge_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
+        INSERT INTO knowledge_fts(rowid, fact) VALUES (new.id, new.fact);
+      END;
+    `);
   }
 
   private prepareStatements(): void {
@@ -312,6 +361,26 @@ export class Store {
       finishRun: db.prepare(`UPDATE session SET ended_at = ?, result = ? WHERE id = ?`),
       listRunsForSource: db.prepare(
         `SELECT * FROM session WHERE source_kind = ? AND source_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      ),
+      // ON CONFLICT targets the partial unique index (scope,key) — keyed facts
+      // supersede in place; NULL-key facts always insert fresh.
+      upsertKnowledge: db.prepare(
+        `INSERT INTO knowledge (scope, kind, key, fact, source_session, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(scope, key) WHERE key IS NOT NULL
+         DO UPDATE SET kind = excluded.kind, fact = excluded.fact,
+                       source_session = excluded.source_session, updated_at = excluded.updated_at`,
+      ),
+      deleteKnowledge: db.prepare(`DELETE FROM knowledge WHERE scope = ? AND key = ?`),
+      loadScopedKnowledge: db.prepare(
+        `SELECT * FROM knowledge WHERE scope = 'global' OR scope = ?
+         ORDER BY scope, kind, updated_at DESC`,
+      ),
+      getKnowledgeByKey: db.prepare(`SELECT * FROM knowledge WHERE scope = ? AND key = ?`),
+      getKnowledgeById: db.prepare(`SELECT * FROM knowledge WHERE id = ?`),
+      searchKnowledge: db.prepare(
+        `SELECT k.* FROM knowledge_fts f JOIN knowledge k ON k.id = f.rowid
+         WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?`,
       ),
     };
     this.deleteSessionTxn = db.transaction((sid: string) => {
@@ -575,5 +644,47 @@ export class Store {
 
   deleteGoal(id: string): void {
     this.stmts.deleteGoal.run(id);
+  }
+
+  rememberFact(i: {
+    scope: string;
+    kind: KnowledgeKind;
+    key?: string | null;
+    fact: string;
+    sourceSession?: string | null;
+  }): KnowledgeRow {
+    const now = Date.now();
+    const info = this.stmts.upsertKnowledge.run(
+      i.scope, i.kind, i.key ?? null, String(i.fact), i.sourceSession ?? null, now, now,
+    );
+    // Keyed upserts may have UPDATEd (no new rowid) — look up by (scope,key).
+    // NULL-key facts always INSERT, so lastInsertRowid is the new row exactly.
+    const row = i.key != null
+      ? this.stmts.getKnowledgeByKey.get(i.scope, i.key)
+      : this.stmts.getKnowledgeById.get(info.lastInsertRowid);
+    return row as KnowledgeRow;
+  }
+
+  loadScopedFacts(projectPath: string): KnowledgeRow[] {
+    return this.stmts.loadScopedKnowledge.all(projectPath) as KnowledgeRow[];
+  }
+
+  /** Remove a keyed fact. Returns true if a row was deleted. */
+  forgetFact(scope: string, key: string): boolean {
+    return this.stmts.deleteKnowledge.run(scope, key).changes > 0;
+  }
+
+  /** Full-text search facts across ALL scopes (cross-project recall).
+   *  Tokenizes free text and OR-joins quoted terms so arbitrary user input —
+   *  including FTS metacharacters — can never produce a MATCH syntax error.
+   *  ponytail: keyword OR-match is enough at this scale; sqlite-vec only if it misses. */
+  recallFacts(query: string, limit = 10): KnowledgeRow[] {
+    const terms = (query ?? '')
+      .split(/\s+/)
+      .map((t) => t.replace(/["*]/g, '').trim())
+      .filter(Boolean)
+      .map((t) => `"${t}"`);
+    if (!terms.length) return [];
+    return this.stmts.searchKnowledge.all(terms.join(' OR '), limit) as KnowledgeRow[];
   }
 }

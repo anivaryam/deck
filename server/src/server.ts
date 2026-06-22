@@ -23,6 +23,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const config = loadConfig(); // throws + exits non-zero if misconfigured
+  // Autonomous runs trusted to use host tools without HITL approval should only run
+  // inside a sandbox with an egress allowlist (see docs/security-sandbox.md). Warn
+  // loudly when that trust is granted without the sandbox marker — the lethal-trifecta
+  // (untrusted input + host power + egress) is then live.
+  if (config.trustAutomation && !config.sandboxed) {
+    console.warn(
+      '[config] DECK_TRUST_AUTOMATION=true WITHOUT DECK_SANDBOX=1 — autonomous ticket/cron/goal runs can execute arbitrary host code from injected content with no human approval and no egress allowlist. Run in a sandbox (see docs/security-sandbox.md) or unset DECK_TRUST_AUTOMATION.',
+    );
+  }
   const store = new Store(process.env.DECK_DB || 'claude-deck.sqlite');
   const miner = new MemoryMiner(store, config);
   const manager = new SessionManager(store, config, undefined, miner);
@@ -31,7 +40,7 @@ async function main() {
   // Goal worktrees live OUTSIDE any project (never nested in deck or the target
   // repo). Override with DECK_GOALS_DIR. addWorktree() creates this on first use.
   const worktreesDir = process.env.DECK_GOALS_DIR || path.join(os.homedir(), '.deck', 'goal-worktrees');
-  const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir);
+  const goalExecutor = new SinglePassExecutor(store, taskRunner, worktreesDir, config.goalVerifiers ?? 3);
   const disposeGoalAutomation = registerGoalAutomation(manager, store, goalExecutor);
   const scheduler = new Scheduler(store, taskRunner);
   const auth = new AuthSessions(config.sessionTtlMs);

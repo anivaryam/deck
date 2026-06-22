@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../src/store.ts';
-import { SinglePassExecutor, registerGoalAutomation } from '../src/goalRunner.ts';
+import { SinglePassExecutor, registerGoalAutomation, aggregateVerdicts } from '../src/goalRunner.ts';
 import { removeWorktree as removeWorktreeForTest } from '../src/git.ts';
 
 let repo: string, wtBase: string, store: Store, manager: any, runs: any[], taskRunner: any;
@@ -253,6 +253,111 @@ describe('autonomous loop', () => {
     store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: true, reasons: 'x', unmet_criteria: [], tests_summary: '' }) });
     manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal_verify', source_id: g.id, status: 'idle', result: 'success' });
     expect(store.getGoal(g.id)!.status).toBe('cancelled'); // NOT resurrected to achieved
+  });
+});
+
+describe('aggregateVerdicts', () => {
+  const v = (achieved: boolean, reasons = '', unmet: string[] = []) => ({ achieved, reasons, unmet_criteria: unmet, tests_summary: '' });
+
+  it('achieved on a strict majority', () => {
+    expect(aggregateVerdicts([v(true), v(true), v(false)]).achieved).toBe(true);
+    expect(aggregateVerdicts([v(true), v(true), v(false)]).votes).toBe('2/3');
+  });
+
+  it('not achieved without a strict majority (tie counts as fail)', () => {
+    expect(aggregateVerdicts([v(true), v(false)]).achieved).toBe(false); // 1/2 tie
+    expect(aggregateVerdicts([v(true), v(false), v(false)]).achieved).toBe(false); // 1/3
+  });
+
+  it('no verdicts → not achieved', () => {
+    const r = aggregateVerdicts([]);
+    expect(r.achieved).toBe(false);
+    expect(r.votes).toBe('0/0');
+  });
+
+  it('carries dissenters\' unmet criteria forward, deduped', () => {
+    const r = aggregateVerdicts([v(true), v(false, 'tests fail', ['a', 'b']), v(false, 'flaky', ['b', 'c'])]);
+    expect(r.achieved).toBe(false);
+    expect(r.unmet_criteria.sort()).toEqual(['a', 'b', 'c']);
+    expect(r.reasons).toMatch(/tests fail/);
+  });
+});
+
+describe('verifier panel', () => {
+  // Drive a full N-panelist round: for each panelist, write its verdict (as the
+  // goal_verdict tool would) then emit the terminal frame the automation listens for.
+  function runPanel(g: any, votes: Array<boolean | null>) {
+    for (const vote of votes) {
+      const sid = store.getGoal(g.id)!.session_id;
+      if (vote !== null) {
+        store.updateGoal(g.id, { verdict: JSON.stringify({ achieved: vote, reasons: vote ? 'ok' : 'no', unmet_criteria: vote ? [] : ['x'], tests_summary: vote ? 'pass' : 'fail' }) });
+      }
+      manager.emit('task', { id: sid, source_kind: 'goal_verify', source_id: g.id, status: vote === null ? 'errored' : 'idle', result: vote === null ? 'error' : 'success' });
+    }
+  }
+
+  function toVerifying(g: any) {
+    store.updateGoal(g.id, { report: JSON.stringify({ summary: 's' }) });
+    manager.emit('task', { id: store.getGoal(g.id)!.session_id, source_kind: 'goal', source_id: g.id, status: 'idle', result: 'success' });
+  }
+
+  it('launches verifiers one at a time and the prompt is framed for a panel', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase, 3);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    toVerifying(g);
+    // only the first panelist launched so far
+    expect(runs.filter((r) => r.sourceKind === 'goal_verify').length).toBe(1);
+    expect(runs.find((r) => r.sourceKind === 'goal_verify').prompt).toMatch(/verifier 1 of 3/i);
+  });
+
+  it('majority achieved → achieved after all 3 panelists vote', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase, 3);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    toVerifying(g);
+    runPanel(g, [true, true, false]);
+    expect(store.getGoal(g.id)!.status).toBe('achieved');
+    expect(runs.filter((r) => r.sourceKind === 'goal_verify').length).toBe(3);
+    expect(JSON.parse(store.getGoal(g.id)!.verdict!).votes).toBe('2/3');
+  });
+
+  it('minority achieved → not achieved → review at cap', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 1 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase, 3);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    toVerifying(g);
+    runPanel(g, [true, false, false]);
+    expect(store.getGoal(g.id)!.status).toBe('review');
+  });
+
+  it('an abstaining panelist (no verdict) does not block a majority of the rest', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x' });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase, 3);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    toVerifying(g);
+    runPanel(g, [true, null, true]); // 2 votes, both achieved
+    expect(store.getGoal(g.id)!.status).toBe('achieved');
+    expect(JSON.parse(store.getGoal(g.id)!.verdict!).votes).toBe('2/2');
+  });
+
+  it('a fresh round resets the panel (retry does not accumulate old votes)', () => {
+    const g = store.createGoal({ projectPath: repo, title: 'T', expectedOutput: 'x', maxIterations: 2 });
+    const exec = new SinglePassExecutor(store, taskRunner, wtBase, 3);
+    registerGoalAutomation(manager, store, exec);
+    exec.start(g.id);
+    toVerifying(g);
+    runPanel(g, [false, false, false]); // round 1 fails → retry build
+    expect(store.getGoal(g.id)!.status).toBe('building');
+    expect(store.getGoal(g.id)!.iteration).toBe(1);
+    toVerifying(g); // round 2 verify
+    const panel = JSON.parse(store.getGoal(g.id)!.verify_panel!);
+    expect(panel.launched).toBe(1); // reset, not carried over from round 1
+    expect(panel.verdicts.length).toBe(0);
   });
 });
 

@@ -82,7 +82,7 @@ function TaskEventWatcher() {
     }
 
     const t = toastForTask(frame);
-    if (t) (t.intent === "error" ? toast.error : toast.success)(t.message);
+    if (t && !document.hidden) (t.intent === "error" ? toast.error : toast.success)(t.message);
 
     // Native notification only when the tab is hidden — otherwise the in-app
     // toast already covers it, and we avoid double-alerting the user.

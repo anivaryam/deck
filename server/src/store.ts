@@ -173,6 +173,7 @@ export class Store {
     getKnowledgeByKey: Database.Statement;
     getKnowledgeById: Database.Statement;
     searchKnowledge: Database.Statement;
+    listAllKnowledge: Database.Statement;
   };
   // Compiled once, like the prepared statements above — atomic session delete
   // (events first, then the row).
@@ -381,6 +382,9 @@ export class Store {
       searchKnowledge: db.prepare(
         `SELECT k.* FROM knowledge_fts f JOIN knowledge k ON k.id = f.rowid
          WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?`,
+      ),
+      listAllKnowledge: db.prepare(
+        `SELECT * FROM knowledge ORDER BY scope, kind, updated_at DESC`,
       ),
     };
     this.deleteSessionTxn = db.transaction((sid: string) => {
@@ -667,6 +671,11 @@ export class Store {
 
   loadScopedFacts(projectPath: string): KnowledgeRow[] {
     return this.stmts.loadScopedKnowledge.all(projectPath) as KnowledgeRow[];
+  }
+
+  /** Every fact across all scopes — for the read-only knowledge viewer. */
+  listAllKnowledge(): KnowledgeRow[] {
+    return this.stmts.listAllKnowledge.all() as KnowledgeRow[];
   }
 
   /** Remove a keyed fact. Returns true if a row was deleted. */

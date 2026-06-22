@@ -110,7 +110,10 @@ export function loadConfig(
     publicOrigin: env.DECK_PUBLIC_ORIGIN,
     permissionMode: env.DECK_PERMISSION_MODE || 'bypassPermissions',
     cookieSecure: env.DECK_COOKIE_SECURE !== undefined ? env.DECK_COOKIE_SECURE !== 'false' : undefined,
-    maxTurns: env.DECK_MAX_TURNS && Number.isFinite(Number(env.DECK_MAX_TURNS)) ? Number(env.DECK_MAX_TURNS) : undefined,
+    maxTurns:
+      env.DECK_MAX_TURNS && Number.isInteger(Number(env.DECK_MAX_TURNS)) && Number(env.DECK_MAX_TURNS) > 0
+        ? Number(env.DECK_MAX_TURNS)
+        : undefined,
     taskModel: env.DECK_TASK_MODEL || undefined,
     taskEffort: env.DECK_TASK_EFFORT || undefined,
     cronMinIntervalSec:

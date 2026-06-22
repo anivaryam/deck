@@ -73,6 +73,13 @@ describe('loadConfig', () => {
     expect(cfg.sessionTtlMs).toBe(3 * 24 * 60 * 60 * 1000);
   });
 
+  it('rejects DECK_MAX_TURNS=0, negative, or non-integer (would disable the unattended cap)', () => {
+    expect(loadConfig({ ...base, DECK_MAX_TURNS: '0' }).maxTurns).toBeUndefined();
+    expect(loadConfig({ ...base, DECK_MAX_TURNS: '-5' }).maxTurns).toBeUndefined();
+    expect(loadConfig({ ...base, DECK_MAX_TURNS: '2.5' }).maxTurns).toBeUndefined();
+    expect(loadConfig({ ...base, DECK_MAX_TURNS: 'abc' }).maxTurns).toBeUndefined();
+  });
+
   it('applies sane defaults when the new knobs are unset', () => {
     const cfg = loadConfig(base);
     expect(cfg.maxTurns).toBeUndefined();

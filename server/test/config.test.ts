@@ -104,3 +104,16 @@ describe('goalMaxIterations', () => {
     expect(loadConfig({ ...base, DECK_GOAL_MAX_ITERATIONS: '7' } as any).goalMaxIterations).toBe(7);
   });
 });
+
+describe('memory mining config', () => {
+  it('defaults: mining on, haiku model', () => {
+    const c = loadConfig({ DECK_TOKEN: 'a-long-test-token-value-1234', PROJECTS_ROOTS: '/tmp' } as any);
+    expect(c.memoryMining).toBe(true);
+    expect(c.memoryModel).toBe('claude-haiku-4-5-20251001');
+  });
+  it('honors overrides', () => {
+    const c = loadConfig({ DECK_TOKEN: 'a-long-test-token-value-1234', PROJECTS_ROOTS: '/tmp', DECK_MEMORY_MINING: 'false', DECK_MEMORY_MODEL: 'claude-sonnet-4-6' } as any);
+    expect(c.memoryMining).toBe(false);
+    expect(c.memoryModel).toBe('claude-sonnet-4-6');
+  });
+});

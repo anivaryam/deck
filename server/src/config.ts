@@ -33,6 +33,11 @@ export interface Config {
   /** Reasoning effort for unattended task/cron runs when none is specified
    *  (DECK_TASK_EFFORT). Falls back to the SDK default when unset. */
   taskEffort?: string;
+  /** Default reasoning effort for interactive chat when the session sets none
+   *  (DECK_CHAT_EFFORT, default 'xhigh'). 'xhigh' is the Claude Code default and
+   *  best for coding/agentic work on the current Opus. Set DECK_CHAT_EFFORT=''
+   *  to fall back to the SDK default instead. */
+  chatEffort?: string;
   /** Minimum seconds between cron fires. A schedule that would fire more often is
    *  rejected at create time (DECK_CRON_MIN_INTERVAL_SEC, default 60). Optional so
    *  partial test fixtures stay valid; consumers fall back to 60. */
@@ -46,6 +51,41 @@ export interface Config {
   goalMaxTurns?: number;
   /** Default attempt cap for a goal's autonomous loop (DECK_GOAL_MAX_ITERATIONS, default 3, min 1). */
   goalMaxIterations?: number;
+  /** Number of independent verifiers on the goal verification panel
+   *  (DECK_GOAL_VERIFIERS, default 3, min 1). Each runs as a fresh, independent
+   *  agent; the goal is achieved only on a strict majority "achieved" vote. 1 =
+   *  the old single-judge behaviour. Optional so partial test fixtures stay valid;
+   *  consumers fall back to 3. */
+  goalVerifiers?: number;
+  /** Trust autonomous (kind='task') runs to use host tools without human approval
+   *  (DECK_TRUST_AUTOMATION=true). OFF by default: cron/ticket/goal prompts derive
+   *  from untrusted content (ticket bodies, repo/web data read mid-run), so an
+   *  injection could drive arbitrary host code. Only set this when the server runs
+   *  in a sandbox with an egress allowlist (see DECK_SANDBOX). */
+  trustAutomation?: boolean;
+  /** Marker asserting the process runs inside a sandbox (container/namespace with
+   *  an egress allowlist) (DECK_SANDBOX=1). Purely advisory — used for the startup
+   *  warning when trustAutomation is on. The actual isolation is a deployment
+   *  concern; deck can't enforce it from inside the process. */
+  sandboxed?: boolean;
+  /** Seconds an autonomous run's sensitive tool call (Bash/Write/Edit/…) waits for
+   *  a human approve/deny before defaulting to DENY (DECK_APPROVAL_TIMEOUT_SEC,
+   *  default 300). 0 = deny immediately without waiting (fully unattended-safe). */
+  approvalTimeoutSec?: number;
+  /** Auto-extract durable facts from finished turns into the knowledge store. */
+  memoryMining: boolean;
+  /** Cheap model used by the memory miner. */
+  memoryModel: string;
+  /** How many times to retry a turn that fails with a TRANSIENT error
+   *  (529 overloaded, 502/503 gateway, timeouts, connection resets) before
+   *  giving up (DECK_MAX_TRANSIENT_RETRIES, default 4). Each retry resumes the
+   *  SDK session so an unattended goal isn't lost to one upstream blip. Optional
+   *  so partial test fixtures stay valid; consumers fall back to 4. */
+  maxTransientRetries?: number;
+  /** Base backoff in ms for transient-error retries; doubles each attempt, capped
+   *  at 30s, with jitter (DECK_RETRY_BASE_MS, default 1000). Optional; defaults to
+   *  1000. Set to 0 in tests for instant retries. */
+  retryBaseMs?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -116,6 +156,7 @@ export function loadConfig(
         : undefined,
     taskModel: env.DECK_TASK_MODEL || undefined,
     taskEffort: env.DECK_TASK_EFFORT || undefined,
+    chatEffort: env.DECK_CHAT_EFFORT !== undefined ? env.DECK_CHAT_EFFORT : 'xhigh',
     cronMinIntervalSec:
       env.DECK_CRON_MIN_INTERVAL_SEC && Number.isFinite(Number(env.DECK_CRON_MIN_INTERVAL_SEC))
         ? Math.max(0, Number(env.DECK_CRON_MIN_INTERVAL_SEC))
@@ -133,5 +174,25 @@ export function loadConfig(
       env.DECK_GOAL_MAX_ITERATIONS && Number.isFinite(Number(env.DECK_GOAL_MAX_ITERATIONS))
         ? Math.max(1, Math.floor(Number(env.DECK_GOAL_MAX_ITERATIONS)))
         : 3,
+    goalVerifiers:
+      env.DECK_GOAL_VERIFIERS && Number.isFinite(Number(env.DECK_GOAL_VERIFIERS))
+        ? Math.max(1, Math.floor(Number(env.DECK_GOAL_VERIFIERS)))
+        : 3,
+    trustAutomation: env.DECK_TRUST_AUTOMATION === 'true',
+    sandboxed: env.DECK_SANDBOX === '1',
+    approvalTimeoutSec:
+      env.DECK_APPROVAL_TIMEOUT_SEC && Number.isFinite(Number(env.DECK_APPROVAL_TIMEOUT_SEC))
+        ? Math.max(0, Number(env.DECK_APPROVAL_TIMEOUT_SEC))
+        : 300,
+    memoryMining: env.DECK_MEMORY_MINING !== 'false',
+    memoryModel: env.DECK_MEMORY_MODEL || 'claude-haiku-4-5-20251001',
+    maxTransientRetries:
+      env.DECK_MAX_TRANSIENT_RETRIES && Number.isFinite(Number(env.DECK_MAX_TRANSIENT_RETRIES))
+        ? Math.max(0, Math.floor(Number(env.DECK_MAX_TRANSIENT_RETRIES)))
+        : 4,
+    retryBaseMs:
+      env.DECK_RETRY_BASE_MS && Number.isFinite(Number(env.DECK_RETRY_BASE_MS))
+        ? Math.max(0, Number(env.DECK_RETRY_BASE_MS))
+        : 1000,
   };
 }

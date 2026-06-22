@@ -172,7 +172,7 @@ beforeEach(async () => {
   await routeApp.register(cookie);
   registerRoutes(routeApp, {
     store: routeStore,
-    config: { token: ROUTE_TOKEN, projectsRoot: routeRoot, port: 1, model: 'claude-opus-4-8' },
+    config: { token: ROUTE_TOKEN, projectsRoot: routeRoot, port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' },
     taskRunner: fakeRunner,
     scheduler,
   });

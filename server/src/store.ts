@@ -96,6 +96,10 @@ export interface GoalRow {
   max_iterations: number;
   iteration: number;
   qa_dimensions: string;
+  /** Verification-panel state: JSON `{ n, launched, verdicts }`. Accumulates each
+   *  panelist's verdict across a sequential verify round; null until the first
+   *  verifier launches. */
+  verify_panel: string | null;
   created_at: number;
 }
 
@@ -174,6 +178,8 @@ export class Store {
     getKnowledgeById: Database.Statement;
     searchKnowledge: Database.Statement;
     listAllKnowledge: Database.Statement;
+    getMinedSeq: Database.Statement;
+    setMinedSeq: Database.Statement;
   };
   // Compiled once, like the prepared statements above — atomic session delete
   // (events first, then the row).
@@ -234,6 +240,7 @@ export class Store {
       ['ended_at', `ALTER TABLE session ADD COLUMN ended_at INTEGER`],
       ['result', `ALTER TABLE session ADD COLUMN result TEXT`],
       ['cwd', `ALTER TABLE session ADD COLUMN cwd TEXT`],
+      ['mined_seq', `ALTER TABLE session ADD COLUMN mined_seq INTEGER NOT NULL DEFAULT 0`],
     ];
     for (const [name, sql] of additions) {
       if (!existing.has(name)) this.db.exec(sql);
@@ -258,6 +265,7 @@ export class Store {
         max_iterations INTEGER NOT NULL DEFAULT 3,
         iteration INTEGER NOT NULL DEFAULT 0,
         qa_dimensions TEXT NOT NULL DEFAULT '[]',
+        verify_panel TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_goal_project ON goal(project_path);
@@ -270,6 +278,7 @@ export class Store {
     if (!goalCols.has('max_iterations')) this.db.exec(`ALTER TABLE goal ADD COLUMN max_iterations INTEGER NOT NULL DEFAULT 3`);
     if (!goalCols.has('iteration')) this.db.exec(`ALTER TABLE goal ADD COLUMN iteration INTEGER NOT NULL DEFAULT 0`);
     if (!goalCols.has('qa_dimensions')) this.db.exec(`ALTER TABLE goal ADD COLUMN qa_dimensions TEXT NOT NULL DEFAULT '[]'`);
+    if (!goalCols.has('verify_panel')) this.db.exec(`ALTER TABLE goal ADD COLUMN verify_panel TEXT`);
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS knowledge (
@@ -386,6 +395,8 @@ export class Store {
       listAllKnowledge: db.prepare(
         `SELECT * FROM knowledge ORDER BY scope, kind, updated_at DESC`,
       ),
+      getMinedSeq: db.prepare(`SELECT mined_seq FROM session WHERE id = ?`),
+      setMinedSeq: db.prepare(`UPDATE session SET mined_seq = ? WHERE id = ?`),
     };
     this.deleteSessionTxn = db.transaction((sid: string) => {
       this.stmts.deleteEventsForSession.run(sid);
@@ -507,6 +518,16 @@ export class Store {
 
   setStatus(id: string, status: SessionStatus): void {
     this.stmts.setStatus.run(status, id);
+  }
+
+  /** Highwater seq the memory miner has already processed for a session. */
+  getMinedSeq(id: string): number {
+    const r = this.stmts.getMinedSeq.get(id) as { mined_seq: number } | undefined;
+    return r?.mined_seq ?? 0;
+  }
+
+  setMinedSeq(id: string, seq: number): void {
+    this.stmts.setMinedSeq.run(seq, id);
   }
 
   /** Replace the per-session disabled-tools set. Empty array clears it (null). */
@@ -631,11 +652,11 @@ export class Store {
 
   updateGoal(
     id: string,
-    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report' | 'verdict' | 'iteration'>>,
+    p: Partial<Pick<GoalRow, 'status' | 'branch' | 'worktree_path' | 'session_id' | 'report' | 'verdict' | 'iteration' | 'verify_panel'>>,
   ): void {
     const sets: string[] = [];
     const vals: unknown[] = [];
-    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report', 'verdict', 'iteration'] as const) {
+    for (const k of ['status', 'branch', 'worktree_path', 'session_id', 'report', 'verdict', 'iteration', 'verify_panel'] as const) {
       if (p[k] !== undefined) {
         sets.push(`${k} = ?`);
         vals.push(p[k]);

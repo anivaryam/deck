@@ -3,7 +3,7 @@ import { Store } from '../src/store.ts';
 import { SessionManager } from '../src/sessionManager.ts';
 
 let store: Store;
-const cfg = { token: 't', projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' } as any;
+const cfg = { token: 't', projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' } as any;
 beforeEach(() => { store = new Store(':memory:'); });
 
 function captureOptions() {

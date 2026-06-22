@@ -78,12 +78,53 @@ function verifyPrompt(goalId: string, expected: string, acceptance: string | nul
   ].join('\n');
 }
 
-/** Slice-1 executor: one agent pass in a per-goal git worktree. */
+/** Per-panelist verification state accumulated across a sequential verify round. */
+interface PanelState {
+  n: number;              // panel size for this round
+  launched: number;       // how many panelists have been started
+  verdicts: VerdictLike[]; // verdicts reported so far (abstentions omitted)
+}
+type VerdictLike = { achieved?: boolean; reasons?: string; unmet_criteria?: string[]; tests_summary?: string };
+
+/** Combine panelist verdicts into one. Achieved only on a STRICT majority of
+ *  "achieved" votes — abstentions (a panelist that errored without voting) and
+ *  ties fall to not-achieved, since verification is adversarial. The merged
+ *  reasons/unmet_criteria carry the dissenters' complaints so a retry fixes the
+ *  real objections. */
+export function aggregateVerdicts(verdicts: VerdictLike[]): {
+  achieved: boolean; reasons: string; unmet_criteria: string[]; tests_summary: string; votes: string; panel: VerdictLike[];
+} {
+  const n = verdicts.length;
+  if (n === 0) {
+    return { achieved: false, reasons: 'no verifier produced a verdict', unmet_criteria: [], tests_summary: '', votes: '0/0', panel: [] };
+  }
+  const yes = verdicts.filter((v) => v.achieved === true).length;
+  const achieved = yes * 2 > n; // strict majority
+  const dissent = verdicts.filter((v) => v.achieved !== true);
+  const reasons = achieved
+    ? `panel confirmed ${yes}/${n}`
+    : `panel confirmed only ${yes}/${n}; dissent: ${dissent.map((d) => d.reasons).filter(Boolean).join(' | ') || 'no reasons given'}`;
+  const unmet = [...new Set(dissent.flatMap((d) => d.unmet_criteria ?? []).filter(Boolean))];
+  const tests_summary = verdicts.map((v) => v.tests_summary).filter(Boolean).join(' || ');
+  return { achieved, reasons, unmet_criteria: unmet, tests_summary, votes: `${yes}/${n}`, panel: verdicts };
+}
+
+/** Frame a single panelist's verify prompt for independence. */
+function panelistPrompt(base: string, index: number, n: number): string {
+  if (n <= 1) return base;
+  return `You are verifier ${index + 1} of ${n} on an INDEPENDENT verification panel. Reach your own conclusion from the evidence — do not assume the other verifiers agree. The goal is achieved only if a majority of the panel independently confirms it.\n\n${base}`;
+}
+
+/** Slice-1 executor: one builder pass + an N-verifier panel, in a per-goal git
+ *  worktree. */
 export class SinglePassExecutor implements GoalExecutor {
   constructor(
     private store: Store,
     private runner: RunnerLike,
     private worktreesDir: string,
+    /** Verifiers on the panel. Default 1 = single-judge (legacy). Production
+     *  injects the configured DECK_GOAL_VERIFIERS (default 3). */
+    private verifierCount = 1,
   ) {}
 
   start(goalId: string): void {
@@ -131,7 +172,8 @@ export class SinglePassExecutor implements GoalExecutor {
     this.store.updateGoal(goalId, { session_id: sessionId });
   }
 
-  /** Launch the adversarial verifier in the goal's existing worktree. */
+  /** Begin a fresh verification round: reset the panel and launch the first
+   *  panelist in the goal's existing worktree. */
   startVerification(goalId: string): void {
     const g = this.store.getGoal(goalId);
     if (!g) return;
@@ -139,6 +181,30 @@ export class SinglePassExecutor implements GoalExecutor {
       this.store.updateGoal(goalId, { status: 'review' });
       return;
     }
+    const panel: PanelState = { n: Math.max(1, this.verifierCount), launched: 1, verdicts: [] };
+    this.store.updateGoal(goalId, { verify_panel: JSON.stringify(panel), verdict: null });
+    this.launchPanelist(g, 0, panel.n);
+  }
+
+  /** Launch the next panelist in the current round (panelists run one at a time,
+   *  sequentially, in the shared worktree).
+   *  ponytail: sequential to avoid concurrent test runs racing in one worktree;
+   *  parallelise with detached per-panelist worktrees if verify latency matters. */
+  startNextVerifier(goalId: string): void {
+    const g = this.store.getGoal(goalId);
+    if (!g || !g.worktree_path) return;
+    let panel: PanelState | null = null;
+    try { panel = g.verify_panel ? JSON.parse(g.verify_panel) : null; } catch { panel = null; }
+    if (!panel) return;
+    const index = panel.launched;
+    panel.launched += 1;
+    this.store.updateGoal(goalId, { verify_panel: JSON.stringify(panel) });
+    this.launchPanelist(g, index, panel.n);
+  }
+
+  /** Run one verifier (panelist `index` of `n`) against the goal's worktree. */
+  private launchPanelist(g: { id: string; project_path: string; worktree_path: string | null; expected_output: string; acceptance: string | null; qa_dimensions: string; title: string | null }, index: number, n: number): void {
+    if (!g.worktree_path) return;
     let dims: string[] = [];
     try { const p = JSON.parse(g.qa_dimensions); if (Array.isArray(p)) dims = p.filter((d) => typeof d === 'string'); } catch { dims = []; }
     let sessionId: string;
@@ -146,18 +212,18 @@ export class SinglePassExecutor implements GoalExecutor {
       sessionId = this.runner.run({
         projectPath: g.project_path,
         cwd: g.worktree_path,
-        prompt: verifyPrompt(goalId, g.expected_output, g.acceptance, dims),
+        prompt: panelistPrompt(verifyPrompt(g.id, g.expected_output, g.acceptance, dims), index, n),
         origin: 'goal',
         title: g.title,
         sourceKind: 'goal_verify',
-        sourceId: goalId,
+        sourceId: g.id,
       });
     } catch (e) {
       tryRemoveWorktree(g.project_path, g.worktree_path);
-      this.store.updateGoal(goalId, { status: 'review', worktree_path: null, verdict: JSON.stringify({ achieved: false, reasons: `failed to start verification: ${e instanceof Error ? e.message : e}`, unmet_criteria: [], tests_summary: '' }) });
+      this.store.updateGoal(g.id, { status: 'review', worktree_path: null, verdict: JSON.stringify({ achieved: false, reasons: `failed to start verification: ${e instanceof Error ? e.message : e}`, unmet_criteria: [], tests_summary: '' }) });
       return;
     }
-    this.store.updateGoal(goalId, { session_id: sessionId });
+    this.store.updateGoal(g.id, { session_id: sessionId });
   }
 }
 
@@ -166,7 +232,7 @@ export class SinglePassExecutor implements GoalExecutor {
 export function registerGoalAutomation(
   manager: Pick<SessionManager, 'on' | 'off'>,
   store: Store,
-  verifier: { start(goalId: string): void; startVerification(goalId: string): void },
+  verifier: { start(goalId: string): void; startVerification(goalId: string): void; startNextVerifier(goalId: string): void },
 ): () => void {
   const onTask = (frame: { id: string; source_kind: string | null; source_id: string | null; status: string; result: string | null }) => {
     try {
@@ -197,9 +263,28 @@ export function registerGoalAutomation(
 
       // kind === 'goal_verify'
       if (frame.result === 'cancelled') { store.updateGoal(g.id, { status: 'cancelled' }); cleanup(); return; }
-      let verdict: { achieved?: boolean } | null = null;
-      try { verdict = g.verdict ? JSON.parse(g.verdict) : null; } catch { verdict = null; }
-      if (verdict?.achieved === true) { store.updateGoal(g.id, { status: 'achieved' }); cleanup(); return; }
+
+      // Accumulate this panelist's verdict (written to g.verdict by the
+      // goal_verdict tool during its run). An abstention (no/invalid verdict)
+      // is simply not counted.
+      let panel: PanelState | null = null;
+      try { panel = g.verify_panel ? JSON.parse(g.verify_panel) : null; } catch { panel = null; }
+      if (!panel) panel = { n: 1, launched: 1, verdicts: [] }; // defensive: pre-panel row
+      let thisVerdict: VerdictLike | null = null;
+      try { thisVerdict = g.verdict ? JSON.parse(g.verdict) : null; } catch { thisVerdict = null; }
+      if (thisVerdict) panel.verdicts.push(thisVerdict);
+
+      // More panelists in this round? clear the slot and launch the next one.
+      if (panel.launched < panel.n) {
+        store.updateGoal(g.id, { verify_panel: JSON.stringify(panel), verdict: null });
+        verifier.startNextVerifier(g.id);
+        return;
+      }
+
+      // Round complete — fold the panel into one final verdict (strict majority).
+      const final = aggregateVerdicts(panel.verdicts);
+      store.updateGoal(g.id, { verify_panel: JSON.stringify(panel), verdict: JSON.stringify(final) });
+      if (final.achieved) { store.updateGoal(g.id, { status: 'achieved' }); cleanup(); return; }
       // not achieved — retry if attempts remain, else park at review
       if (g.iteration + 1 < g.max_iterations) {
         store.updateGoal(g.id, { iteration: g.iteration + 1 });

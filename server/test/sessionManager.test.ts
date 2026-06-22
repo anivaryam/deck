@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../src/store.ts';
 import { SessionManager, BusyError } from '../src/sessionManager.ts';
 
-const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
 
 // A fake query() that yields an init message then an assistant message then a result.
 function fakeQuery() {
@@ -178,10 +178,10 @@ describe('SessionManager', () => {
     expect(capturedEffort).toBe('xhigh');
   });
 
-  it('omits effort from queryFn options when session effort is null', async () => {
+  it('omits effort for chat when session effort is null and cfg.chatEffort is empty', async () => {
     const s = store.create({ projectPath: '/p/alpha' }); // no effort
     let captured: Record<string, unknown> | undefined;
-    const effortMgr = new SessionManager(store, cfg, (args) => {
+    const effortMgr = new SessionManager(store, { ...cfg, chatEffort: '' }, (args) => {
       captured = args.options;
       return (async function* () {
         yield { type: 'system', subtype: 'init', session_id: 'sdk-e2', uuid: 'f0' };
@@ -189,6 +189,33 @@ describe('SessionManager', () => {
       })();
     });
     await effortMgr.send(s.id, 'hi');
+    expect(captured && 'effort' in captured).toBe(false);
+  });
+
+  it('defaults interactive chat effort to xhigh when the session sets none', async () => {
+    const s = store.create({ projectPath: '/p/alpha' }); // chat, no effort
+    let captured: unknown;
+    const effortMgr = new SessionManager(store, cfg, (args) => {
+      captured = args.options.effort;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-cd', uuid: 'g0' };
+        yield { type: 'result', uuid: 'g1', result: 'ok' };
+      })();
+    });
+    await effortMgr.send(s.id, 'hi');
+    expect(captured).toBe('xhigh');
+  });
+
+  it('does not default effort for task runs (only chat)', async () => {
+    const t = store.createTask({ projectPath: '/p/alpha', prompt: 'go', origin: 'cron' }); // no effort
+    let captured: Record<string, unknown> | undefined;
+    const effortMgr = new SessionManager(store, cfg, (args) => {
+      captured = args.options;
+      return (async function* () {
+        yield { type: 'result', uuid: 'h1', result: 'ok' };
+      })();
+    });
+    await effortMgr.send(t.id, 'go');
     expect(captured && 'effort' in captured).toBe(false);
   });
 
@@ -409,5 +436,61 @@ describe('SessionManager', () => {
     expect(imageBlock.source.type).toBe('base64');
     expect(imageBlock.source.media_type).toBe('image/png');
     expect(imageBlock.source.data).toBe('base64imgdata');
+  });
+
+  it('retries a transient (529) failure with resume, then finishes idle', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    const calls: any[] = [];
+    const m = new SessionManager(store, { ...cfg, retryBaseMs: 0 }, (args) => {
+      calls.push(args);
+      const n = calls.length;
+      return (async function* () {
+        if (n === 1) {
+          yield { type: 'system', subtype: 'init', session_id: 'sdk-r', uuid: 'a' };
+          throw Object.assign(new Error('Overloaded'), { status: 529 });
+        }
+        yield { type: 'result', subtype: 'success', uuid: 'b', result: 'ok' };
+      })();
+    });
+    await m.send(s.id, 'go');
+    expect(calls.length).toBe(2);
+    expect(store.get(s.id)?.status).toBe('idle');
+    const types = store.eventsSince(s.id, 0).map((e) => e.type);
+    expect(types).toContain('retry');
+    expect(types).not.toContain('error');
+    // 2nd attempt resumed the session and continued (not the original prompt)
+    expect(calls[1].options.resume).toBe('sdk-r');
+    expect(typeof calls[1].prompt).toBe('string');
+    expect(calls[1].prompt).not.toBe('go');
+  });
+
+  it('gives up after maxTransientRetries and records an error', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let calls = 0;
+    const m = new SessionManager(store, { ...cfg, retryBaseMs: 0, maxTransientRetries: 2 }, () => {
+      calls++;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-x', uuid: 'a' };
+        throw Object.assign(new Error('502 Bad Gateway'), { status: 502 });
+      })();
+    });
+    await expect(m.send(s.id, 'go')).rejects.toThrow(/502/);
+    expect(calls).toBe(3); // initial + 2 retries
+    expect(store.get(s.id)?.status).toBe('errored');
+  });
+
+  it('does not retry a non-transient error (fails fast)', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let calls = 0;
+    const m = new SessionManager(store, { ...cfg, retryBaseMs: 0 }, () => {
+      calls++;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-nt', uuid: 'a' };
+        throw Object.assign(new Error('invalid request: bad schema'), { status: 400 });
+      })();
+    });
+    await expect(m.send(s.id, 'go')).rejects.toThrow(/invalid request/);
+    expect(calls).toBe(1); // no retry
+    expect(store.get(s.id)?.status).toBe('errored');
   });
 });

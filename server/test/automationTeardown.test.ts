@@ -20,7 +20,7 @@ describe('automation listener teardown', () => {
 
   it('registerGoalAutomation disposer removes its task listener', () => {
     const em = new EventEmitter();
-    const verifier = { start() {}, startVerification() {} };
+    const verifier = { start() {}, startVerification() {}, startNextVerifier() {} };
     const dispose = registerGoalAutomation(em as any, {} as any, verifier);
     expect(em.listenerCount('task')).toBe(1);
     dispose();

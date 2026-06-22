@@ -46,6 +46,25 @@ export interface Config {
   goalMaxTurns?: number;
   /** Default attempt cap for a goal's autonomous loop (DECK_GOAL_MAX_ITERATIONS, default 3, min 1). */
   goalMaxIterations?: number;
+  /** Trust autonomous (kind='task') runs to use host tools without human approval
+   *  (DECK_TRUST_AUTOMATION=true). OFF by default: cron/ticket/goal prompts derive
+   *  from untrusted content (ticket bodies, repo/web data read mid-run), so an
+   *  injection could drive arbitrary host code. Only set this when the server runs
+   *  in a sandbox with an egress allowlist (see DECK_SANDBOX). */
+  trustAutomation?: boolean;
+  /** Marker asserting the process runs inside a sandbox (container/namespace with
+   *  an egress allowlist) (DECK_SANDBOX=1). Purely advisory — used for the startup
+   *  warning when trustAutomation is on. The actual isolation is a deployment
+   *  concern; deck can't enforce it from inside the process. */
+  sandboxed?: boolean;
+  /** Seconds an autonomous run's sensitive tool call (Bash/Write/Edit/…) waits for
+   *  a human approve/deny before defaulting to DENY (DECK_APPROVAL_TIMEOUT_SEC,
+   *  default 300). 0 = deny immediately without waiting (fully unattended-safe). */
+  approvalTimeoutSec?: number;
+  /** Auto-extract durable facts from finished turns into the knowledge store. */
+  memoryMining: boolean;
+  /** Cheap model used by the memory miner. */
+  memoryModel: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -133,5 +152,13 @@ export function loadConfig(
       env.DECK_GOAL_MAX_ITERATIONS && Number.isFinite(Number(env.DECK_GOAL_MAX_ITERATIONS))
         ? Math.max(1, Math.floor(Number(env.DECK_GOAL_MAX_ITERATIONS)))
         : 3,
+    trustAutomation: env.DECK_TRUST_AUTOMATION === 'true',
+    sandboxed: env.DECK_SANDBOX === '1',
+    approvalTimeoutSec:
+      env.DECK_APPROVAL_TIMEOUT_SEC && Number.isFinite(Number(env.DECK_APPROVAL_TIMEOUT_SEC))
+        ? Math.max(0, Number(env.DECK_APPROVAL_TIMEOUT_SEC))
+        : 300,
+    memoryMining: env.DECK_MEMORY_MINING !== 'false',
+    memoryModel: env.DECK_MEMORY_MODEL || 'claude-haiku-4-5-20251001',
   };
 }

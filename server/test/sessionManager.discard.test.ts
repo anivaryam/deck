@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { Store } from '../src/store.ts';
 import { SessionManager, type QueryFn } from '../src/sessionManager.ts';
 
-const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
 
 function deferred<T = void>() {
   let resolve!: (v: T) => void;

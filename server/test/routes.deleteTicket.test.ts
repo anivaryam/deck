@@ -16,7 +16,7 @@ beforeEach(async () => {
   app = Fastify();
   await app.register(cookie);
   store = new Store(':memory:');
-  const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+  const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
   const fakeManager = { send: async () => {} } as any;
   const taskRunner = new TaskRunner(store, fakeManager);
   const scheduler = new Scheduler(store, taskRunner);

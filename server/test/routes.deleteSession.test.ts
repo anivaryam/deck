@@ -18,7 +18,7 @@ beforeEach(async () => {
   await app.register(cookie);
   store = new Store(':memory:');
   closed = [];
-  const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+  const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
   const fakeManager = { send: async () => {} } as any;
   const taskRunner = new TaskRunner(store, fakeManager);
   const scheduler = new Scheduler(store, taskRunner);
@@ -85,7 +85,7 @@ describe('DELETE /api/sessions/:id', () => {
       isActive: (id: string) => id === s.id,
       discard: (id: string) => discarded.push(id),
     } as any;
-    const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+    const cfg = { token: TOKEN, projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
     const taskRunner = new TaskRunner(store2, { send: async () => {} } as any);
     const scheduler = new Scheduler(store2, taskRunner);
     registerRoutes(app2, {

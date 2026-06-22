@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../src/store.ts';
 import { SessionManager, BusyError } from '../src/sessionManager.ts';
 
-const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8' };
+const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
 
 // A fake query() that yields an init message then an assistant message then a result.
 function fakeQuery() {

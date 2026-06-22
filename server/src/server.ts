@@ -96,6 +96,11 @@ async function main() {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
   await app.listen({ host: '127.0.0.1', port: config.port });
+  // Repair sessions stranded 'active' by a prior crash BEFORE the scheduler reloads —
+  // otherwise the cron in-flight guard treats a dead session as running and that cron
+  // never fires again.
+  const repaired = store.reconcileActiveSessions();
+  if (repaired) app.log.warn(`reconciled ${repaired} stale active session(s) from a prior crash`);
   scheduler.reload();
   app.log.info('scheduler started');
   app.log.info(`claude-deck listening on http://127.0.0.1:${config.port}`);

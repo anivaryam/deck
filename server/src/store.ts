@@ -168,6 +168,15 @@ export class Store {
     this.prepareStatements();
   }
 
+  /** Crash recovery. A session left 'active' when the process died can never finish
+   *  on its own, and the scheduler's in-flight guard treats it as still running — so
+   *  that cron silently never fires again (permanent deadlock). Mark every stranded
+   *  'active' session 'errored' at boot. Returns the number repaired.
+   *  ponytail: one-shot at boot, inline prepare — not a hot path. */
+  reconcileActiveSessions(): number {
+    return this.db.prepare(`UPDATE session SET status = 'errored' WHERE status = 'active'`).run().changes;
+  }
+
   private migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS session (

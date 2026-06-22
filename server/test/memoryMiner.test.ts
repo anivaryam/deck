@@ -20,6 +20,20 @@ function seed(projectPath = '/p/alpha') {
 }
 
 describe('MemoryMiner', () => {
+  it('runs fully isolated from filesystem settings (settingSources [])', async () => {
+    const s = seed();
+    let captured: unknown;
+    const capturing = (args: any) => {
+      captured = args.options.settingSources;
+      return (async function* () {
+        yield { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '[]' }] } };
+      })();
+    };
+    const miner = new MemoryMiner(store, cfg, capturing);
+    await miner.mineSession(s.id);
+    expect(captured).toEqual([]);
+  });
+
   it('extracts facts and persists them scoped + with provenance', async () => {
     const s = seed();
     const facts = JSON.stringify([{ scope: 'project', kind: 'binding', key: 'deploy', fact: 'deploys via Railway project deck-prod' }]);

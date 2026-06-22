@@ -86,6 +86,9 @@ export class MemoryMiner {
         systemPrompt: EXTRACTION_PROMPT,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
+        // Pure transcript extraction — needs no project/user config. Full
+        // isolation keeps global SessionStart hooks out of the extraction prompt.
+        settingSources: [],
       },
     })) {
       if (msg?.type === 'assistant') {

@@ -40,6 +40,32 @@ function compactInput(input: any): string {
   }
 }
 
+// Belt-and-suspenders against context leaks: occasionally the model echoes its
+// own injected scaffolding (a `<system-reminder>` block, the SessionStart
+// hook banners, the harness post-prompt instruction) as the visible reply
+// instead of answering. The root cause is reduced server-side (settingSources
+// isolation + xhigh effort), but echoing is a model misfire that no config can
+// hard-guarantee away — so strip the known signatures before they ever render.
+// Conservative: only removes content carrying these exact markers; ordinary
+// prose (even prose that mentions these words) passes through untouched.
+export function sanitizeAssistantText(raw: string): string {
+  if (!raw) return raw;
+  let t = raw;
+  // 1. Whole <system-reminder>…</system-reminder> blocks.
+  t = t.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, "");
+  // 2. Orphan close tag — the leak began mid-context so the opening tag fell
+  //    outside the window. Drop everything up to and including the last close.
+  const CLOSE = "</system-reminder>";
+  const i = t.toLowerCase().lastIndexOf(CLOSE);
+  if (i !== -1) t = t.slice(i + CLOSE.length);
+  // 3. Injected SessionStart banner lines (ponytail / caveman / superpowers).
+  t = t.replace(/^.*\b(?:PONYTAIL|CAVEMAN|SUPERPOWERS)\b.*MODE ACTIVE.*$/gim, "");
+  // 4. The harness post-prompt instruction, if echoed.
+  t = t.replace(/^Respond to the user'?s prompt\..*$/gim, "");
+  // Tidy the seams left by removals.
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Normalize an SDK message `content` into a block array. The SDK normally sends
 // an array, but a string is valid for simple turns — without this, `.filter`/`for…of`
 // downstream would throw inside the fold (a render crash caught only by the route
@@ -119,10 +145,12 @@ function foldEvent(state: FoldState, ev: DeckMessage, i: number): void {
 
   if (ev.type === "assistant") {
     const content = asBlocks(ev.payload?.message?.content);
-    const text = content
-      .filter((b: any) => b?.type === "text")
-      .map((b: any) => b.text)
-      .join("");
+    const text = sanitizeAssistantText(
+      content
+        .filter((b: any) => b?.type === "text")
+        .map((b: any) => b.text)
+        .join(""),
+    );
     if (text.trim()) {
       out.push({ id: `m${k}-t`, role: "claude", content: text, time });
     }

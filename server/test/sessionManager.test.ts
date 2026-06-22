@@ -438,6 +438,34 @@ describe('SessionManager', () => {
     expect(imageBlock.source.data).toBe('base64imgdata');
   });
 
+  it('isolates sessions from the operator global config by default (settingSources project+local)', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let captured: unknown;
+    const m = new SessionManager(store, cfg, (args) => {
+      captured = args.options.settingSources;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-ss', uuid: 'a' };
+        yield { type: 'result', uuid: 'b', result: 'ok' };
+      })();
+    });
+    await m.send(s.id, 'hi');
+    expect(captured).toEqual(['project', 'local']);
+  });
+
+  it('respects a cfg.settingSources override (e.g. operator opts user back in)', async () => {
+    const s = store.create({ projectPath: '/p/alpha' });
+    let captured: unknown;
+    const m = new SessionManager(store, { ...cfg, settingSources: ['user', 'project', 'local'] }, (args) => {
+      captured = args.options.settingSources;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'sdk-ss2', uuid: 'a' };
+        yield { type: 'result', uuid: 'b', result: 'ok' };
+      })();
+    });
+    await m.send(s.id, 'hi');
+    expect(captured).toEqual(['user', 'project', 'local']);
+  });
+
   it('retries a transient (529) failure with resume, then finishes idle', async () => {
     const s = store.create({ projectPath: '/p/alpha' });
     const calls: any[] = [];

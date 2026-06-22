@@ -76,6 +76,14 @@ export interface Config {
   memoryMining: boolean;
   /** Cheap model used by the memory miner. */
   memoryModel: string;
+  /** Which filesystem setting sources the SDK loads for a run (DECK_SETTING_SOURCES,
+   *  comma-separated of user|project|local). Default 'project,local' — deck agent
+   *  sessions load the TARGET project's own config (its instruction file + project
+   *  skills/hooks/MCP) but NOT the operator's global config (whose SessionStart
+   *  hooks — output-style / workflow personalities — bloat context and get echoed
+   *  into replies). Set to 'user,project,local' to also inherit global skills/MCP,
+   *  or '' for full isolation. Optional; consumers fall back to ['project','local']. */
+  settingSources?: string[];
   /** How many times to retry a turn that fails with a TRANSIENT error
    *  (529 overloaded, 502/503 gateway, timeouts, connection resets) before
    *  giving up (DECK_MAX_TRANSIENT_RETRIES, default 4). Each retry resumes the
@@ -157,6 +165,10 @@ export function loadConfig(
     taskModel: env.DECK_TASK_MODEL || undefined,
     taskEffort: env.DECK_TASK_EFFORT || undefined,
     chatEffort: env.DECK_CHAT_EFFORT !== undefined ? env.DECK_CHAT_EFFORT : 'xhigh',
+    settingSources:
+      env.DECK_SETTING_SOURCES !== undefined
+        ? env.DECK_SETTING_SOURCES.split(',').map((s) => s.trim()).filter((s) => s === 'user' || s === 'project' || s === 'local')
+        : ['project', 'local'],
     cronMinIntervalSec:
       env.DECK_CRON_MIN_INTERVAL_SEC && Number.isFinite(Number(env.DECK_CRON_MIN_INTERVAL_SEC))
         ? Math.max(0, Number(env.DECK_CRON_MIN_INTERVAL_SEC))

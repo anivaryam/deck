@@ -8,3 +8,8 @@ export function useProjects() {
 export function useSessions() {
   return useQuery({ queryKey: ["sessions"], queryFn: () => api.sessions() });
 }
+
+// Server defaults for new chats. Effectively static per server process, so don't refetch.
+export function useServerConfig() {
+  return useQuery({ queryKey: ["config"], queryFn: () => api.config(), staleTime: Infinity });
+}

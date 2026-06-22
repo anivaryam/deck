@@ -134,6 +134,20 @@ export function useKnowledge() {
   return useQuery({ queryKey: ["knowledge"], queryFn: () => api.knowledge() });
 }
 
+/** Pending HITL approvals. Polls — these appear/vanish while an autonomous run is
+ *  blocked, and there's no dedicated WS subscription for them. */
+export function useApprovals() {
+  return useQuery({ queryKey: ["approvals"], queryFn: () => api.approvals(), refetchInterval: 4000 });
+}
+
+export function useResolveApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, allow }: { id: string; allow: boolean }) => api.resolveApproval(id, allow),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["approvals"] }),
+  });
+}
+
 export function useGoals() {
   return useQuery({
     queryKey: ["goals"],

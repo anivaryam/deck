@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Breadcrumb } from "./breadcrumb";
 import { NotificationsToggle } from "./notifications-toggle";
 
 /** Two-pane automation shell. Collapses to single column under 820px. */
@@ -26,21 +26,16 @@ export function AutomationPage({
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h1 className="font-mono text-xs font-medium tracking-tight text-muted-foreground">
-          {projectThreadId ? (
-            <Link
-              to="/$threadId"
-              params={{ threadId: projectThreadId }}
-              className="hover:text-foreground transition-colors"
-            >
-              {projectName}
-            </Link>
-          ) : (
-            <span>{projectName}</span>
-          )}
-          <span className="mx-1.5 select-none opacity-50">/</span>
-          <span className="font-bold text-foreground">{section}</span>
-        </h1>
+        <Breadcrumb
+          mobile="back"
+          items={[
+            { label: "deck", to: "/" },
+            projectThreadId
+              ? { label: projectName, to: "/$threadId", params: { threadId: projectThreadId } }
+              : { label: projectName },
+            { label: section },
+          ]}
+        />
         <div className="flex items-center gap-1">
           {actions}
           <NotificationsToggle />

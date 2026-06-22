@@ -338,11 +338,12 @@ export class SessionManager extends EventEmitter {
         abortController: ac,
         ...(maxTurns ? { maxTurns } : {}),
         // Effort: an explicit per-session value wins; otherwise interactive chat
-        // defaults to cfg.chatEffort ('xhigh') so coding/agentic turns run at the
-        // intelligence level the current Opus needs. Empty cfg value → omit (SDK
-        // default). Tasks/goals keep their own effort (taskEffort at creation).
+        // falls back to cfg.chatEffort — the single source of truth for the default
+        // (config.ts sets it, default 'xhigh'). An empty/unset cfg value omits effort
+        // so the SDK applies its own default. Tasks/goals keep their own effort
+        // (taskEffort at creation).
         ...((() => {
-          const eff = sess.effort || (sess.kind === 'chat' ? (this.cfg.chatEffort ?? 'xhigh') : undefined);
+          const eff = sess.effort || (sess.kind === 'chat' ? this.cfg.chatEffort : undefined);
           return eff ? { effort: eff } : {};
         })()),
         ...(disallowedTools.length ? { disallowedTools } : {}),

@@ -1,4 +1,5 @@
 import { ChevronDown, PanelLeft, PanelRight } from "lucide-react";
+import { Breadcrumb } from "./breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -37,11 +38,14 @@ export function ChatHeader({
         </IconBtn>
       </div>
 
-      <div className="flex min-w-0 items-center gap-2">
-        {project && <span className="hidden truncate text-xs text-muted-foreground sm:inline">{project}</span>}
-        <span className="hidden text-muted-foreground/40 sm:inline">/</span>
-        <h1 className="truncate text-sm font-medium text-foreground">{title}</h1>
-      </div>
+      <Breadcrumb
+        mobile="current"
+        items={[
+          { label: "deck", to: "/" },
+          ...(project ? [{ label: project }] : []),
+          { label: title },
+        ]}
+      />
 
       {/* right */}
       <div className="flex shrink-0 items-center gap-0.5">

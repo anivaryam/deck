@@ -67,6 +67,20 @@ describe('protected routes', () => {
     expect(res.json().map((p: any) => p.name)).toContain('alpha');
   });
 
+  it('blocks /api/config without a cookie', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/config' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('reports server defaults for new chats', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
+    const cookieHeader = login.headers['set-cookie'] as string;
+    const res = await app.inject({ method: 'GET', url: '/api/config', headers: { cookie: cookieHeader } });
+    expect(res.statusCode).toBe(200);
+    // chatEffort unset in this fixture → coalesces to the SDK default 'high'.
+    expect(res.json()).toEqual({ defaultModel: 'claude-opus-4-8', defaultEffort: 'high' });
+  });
+
   it('creates a session in a valid project and rejects an invalid one', async () => {
     const login = await app.inject({ method: 'POST', url: '/auth', payload: { token: TOKEN } });
     const cookieHeader = login.headers['set-cookie'] as string;

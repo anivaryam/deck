@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../src/store.ts';
 import { SessionManager, BusyError } from '../src/sessionManager.ts';
 
-const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm' };
+const cfg = { token: 'x'.repeat(16), projectsRoot: '/p', port: 1, model: 'claude-opus-4-8', memoryMining: false, memoryModel: 'm', chatEffort: 'xhigh' };
 
 // A fake query() that yields an init message then an assistant message then a result.
 function fakeQuery() {
@@ -192,7 +192,7 @@ describe('SessionManager', () => {
     expect(captured && 'effort' in captured).toBe(false);
   });
 
-  it('defaults interactive chat effort to xhigh when the session sets none', async () => {
+  it('forwards cfg.chatEffort for interactive chat when the session sets none', async () => {
     const s = store.create({ projectPath: '/p/alpha' }); // chat, no effort
     let captured: unknown;
     const effortMgr = new SessionManager(store, cfg, (args) => {

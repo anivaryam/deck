@@ -10,7 +10,7 @@ import { SettingsPanel } from "./settings-panel";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useStickToBottom } from "@/hooks/use-stick-to-bottom";
-import { useProjects, useSessions } from "@/hooks/use-deck-data";
+import { useProjects, useServerConfig, useSessions } from "@/hooks/use-deck-data";
 import { useSocket, dropSessionCache, clearSessionCache } from "@/lib/ws";
 import { createIncrementalFolder } from "@/lib/adapt";
 import { hiddenAbove, tailWindow } from "@/lib/window";
@@ -47,6 +47,7 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
 
   const projectsQ = useProjects();
   const sessionsQ = useSessions();
+  const configQ = useServerConfig();
 
   // Any /api 401 means the cookie is missing/expired → back to the login gate.
   // Branch on the typed status, not the message text.
@@ -63,6 +64,20 @@ export function DeckView({ activeThreadId }: { activeThreadId?: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState<Model>(MODELS[0]);
   const [effort, setEffort] = useState<EffortLevel>("high");
+
+  // Seed the pending new-chat model/effort from the server's actual defaults
+  // (DECK_MODEL / DECK_CHAT_EFFORT) once, so the picker reflects what a new chat
+  // will really run instead of the hardcoded initial guess above. Guarded so a
+  // later refetch never clobbers the user's own selection.
+  const seededDefaults = useRef(false);
+  useEffect(() => {
+    const cfg = configQ.data;
+    if (seededDefaults.current || !cfg) return;
+    seededDefaults.current = true;
+    if (EFFORTS.some((e) => e.id === cfg.defaultEffort)) setEffort(cfg.defaultEffort);
+    const m = MODELS.find((mm) => mm.id === cfg.defaultModel);
+    if (m) setModel(m);
+  }, [configQ.data]);
 
   const { messages: raw, busy, connected, sendPrompt, cancel } = useSocket(activeThreadId ?? null);
   // Incremental fold: only newly-appended events are processed each frame instead

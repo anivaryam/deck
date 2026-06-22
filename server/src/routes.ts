@@ -140,6 +140,16 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     }
   });
 
+  // Defaults the web UI seeds its pickers from, so a fresh chat's pending
+  // model/effort match what the server will actually apply — instead of a
+  // hardcoded client guess that drifts from DECK_MODEL / DECK_CHAT_EFFORT.
+  app.get('/api/config', async () => ({
+    defaultModel: config.model,
+    // chatEffort may be '' (opt out → SDK default 'high'); coalesce so the client
+    // always gets a concrete level to highlight.
+    defaultEffort: config.chatEffort || 'high',
+  }));
+
   app.get('/api/projects', async () => listProjects(projectsRoots));
 
   app.post<{ Body: { name?: string } }>('/api/projects', async (req, reply) => {
@@ -251,6 +261,15 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     // cancel() returns false when no turn is in flight.
     const aborted = manager?.cancel(req.params.id) ?? false;
     return { aborted };
+  });
+
+  // approvals — HITL gate for sensitive tool calls on untrusted autonomous runs
+  app.get('/api/approvals', async () => manager?.listPendingApprovals() ?? []);
+  app.post<{ Params: { id: string }; Body: { allow?: boolean } }>('/api/approvals/:id', async (req, reply) => {
+    const allow = req.body?.allow === true;
+    const ok = manager?.resolveApproval(req.params.id, allow) ?? false;
+    if (!ok) return reply.code(404).send({ error: 'no such pending approval (already decided or expired)' });
+    return { resolved: true, allow };
   });
 
   // runs

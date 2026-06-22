@@ -15,7 +15,7 @@ export const MODELS: Model[] = [
 export const EFFORTS: Effort[] = [
   { id: "low", name: "low", blurb: "minimal thinking · fastest" },
   { id: "medium", name: "medium", blurb: "moderate thinking" },
-  { id: "high", name: "high", blurb: "deep reasoning · default" },
+  { id: "high", name: "high", blurb: "deep reasoning" },
   { id: "xhigh", name: "xhigh", blurb: "deeper than high" },
   { id: "max", name: "max", blurb: "maximum effort · select models" },
 ];

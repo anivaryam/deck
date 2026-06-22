@@ -98,7 +98,12 @@ export function SettingsPanel({
             <Separator />
             <SectionLabel>reasoning effort</SectionLabel>
             {efforts.map((e) => {
-              const active = e.id === effort;
+              // With a chat open the filled dot tracks what's actually running
+              // (the session's locked effort); the pending pick for new chats is
+              // shown as a hollow "next chat" marker only when it differs.
+              const activeEffort = sessionEffort ?? effort;
+              const isActive = e.id === activeEffort;
+              const isNext = sessionEffort != null && e.id === effort && effort !== sessionEffort;
               return (
                 <button
                   key={e.id}
@@ -106,14 +111,28 @@ export function SettingsPanel({
                   onClick={() => onEffortChange(e.id)}
                   className={cn(
                     "grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded border px-2.5 py-2 text-left text-xs transition-colors",
-                    active
+                    isActive
                       ? "border-primary/40 bg-primary/5"
-                      : "border-border bg-card hover:border-border/80",
+                      : isNext
+                        ? "border-primary/30 bg-card"
+                        : "border-border bg-card hover:border-border/80",
                   )}
                 >
-                  <span className={cn("size-1.5 rounded-full", active ? "bg-primary" : "bg-muted-foreground/30")} />
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      isActive
+                        ? "bg-primary"
+                        : isNext
+                          ? "border border-primary bg-transparent"
+                          : "bg-muted-foreground/30",
+                    )}
+                  />
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{e.name}</div>
+                    <div className="truncate font-medium">
+                      {e.name}
+                      {isNext && <span className="text-muted-foreground"> · next chat</span>}
+                    </div>
                     <div className="truncate text-[10px] text-muted-foreground">{e.blurb}</div>
                   </div>
                 </button>
@@ -121,7 +140,9 @@ export function SettingsPanel({
             })}
             <p className="px-1 text-[10px] text-muted-foreground">
               {sessionEffort
-                ? `this chat is locked to "${sessionEffort}" · selection applies to new chats`
+                ? effort !== sessionEffort
+                  ? `this chat is locked to "${sessionEffort}" · new chats will use "${effort}"`
+                  : `this chat is locked to "${sessionEffort}"`
                 : `applies when you start a new chat`}
             </p>
           </TabsContent>

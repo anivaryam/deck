@@ -43,6 +43,13 @@ export type Effort = {
   blurb: string;
 };
 
+// Server-reported defaults for new chats (GET /api/config). Mirrors the values the
+// session manager applies when a session sets none (DECK_MODEL / DECK_CHAT_EFFORT).
+export interface ServerConfig {
+  defaultModel: string;
+  defaultEffort: EffortLevel;
+}
+
 // ---- Backend wire types (mirror server/src/store.ts + routes.ts) ----
 export interface Project {
   name: string;
@@ -162,4 +169,14 @@ export interface Knowledge {
   source_session: string | null;
   created_at: number;
   updated_at: number;
+}
+
+/** A sensitive tool call on an untrusted autonomous run, blocked awaiting a human
+ *  approve/deny (the HITL gate). */
+export interface Approval {
+  id: string;
+  sessionId: string;
+  tool: string;
+  summary: string;
+  createdAt: number;
 }

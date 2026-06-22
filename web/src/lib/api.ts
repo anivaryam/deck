@@ -1,4 +1,4 @@
-import type { Cron, Goal, GoalDetail, Knowledge, Project, Session, Ticket, TaskDetail } from "./types";
+import type { Approval, Cron, Goal, GoalDetail, Knowledge, Project, ServerConfig, Session, Ticket, TaskDetail } from "./types";
 
 /** Error carrying the HTTP status so callers can branch on it (e.g. 401 → login)
  *  instead of regex-matching the message. */
@@ -48,6 +48,9 @@ export const api = {
   },
   async logout(): Promise<void> {
     await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+  },
+  async config(): Promise<ServerConfig> {
+    return json(await fetch("/api/config", { credentials: "same-origin" }));
   },
   async projects(): Promise<Project[]> {
     return json(await fetch("/api/projects", { credentials: "same-origin" }));
@@ -267,5 +270,20 @@ export const api = {
   // ---- knowledge ----
   async knowledge(): Promise<Knowledge[]> {
     return json(await fetch("/api/knowledge", { credentials: "same-origin" }));
+  },
+
+  // ---- approvals (HITL gate) ----
+  async approvals(): Promise<Approval[]> {
+    return json(await fetch("/api/approvals", { credentials: "same-origin" }));
+  },
+  async resolveApproval(id: string, allow: boolean): Promise<void> {
+    return ok(
+      await fetch(`/api/approvals/${encodeURIComponent(id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ allow }),
+        credentials: "same-origin",
+      }),
+    );
   },
 };

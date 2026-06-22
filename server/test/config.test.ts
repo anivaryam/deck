@@ -87,6 +87,14 @@ describe('loadConfig', () => {
     expect(cfg.cronMinIntervalSec).toBe(60);
     expect(cfg.sessionTtlMs).toBe(7 * 24 * 60 * 60 * 1000);
   });
+
+  // chatEffort is the single source of truth for the interactive default; the
+  // session manager forwards it verbatim and never re-states the literal.
+  it('defaults chatEffort to xhigh, honors an override, and allows opting out', () => {
+    expect(loadConfig(base).chatEffort).toBe('xhigh');
+    expect(loadConfig({ ...base, DECK_CHAT_EFFORT: 'max' }).chatEffort).toBe('max');
+    expect(loadConfig({ ...base, DECK_CHAT_EFFORT: '' }).chatEffort).toBe(''); // → SDK default
+  });
 });
 
 describe('goalMaxTurns', () => {

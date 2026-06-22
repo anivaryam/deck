@@ -93,3 +93,23 @@ describe('Store knowledge FTS recall', () => {
     expect(store.recallFacts('Paddle')).toHaveLength(1);   // new term indexed
   });
 });
+
+describe('Store listAllKnowledge', () => {
+  it('returns facts from every scope', () => {
+    store.rememberFact({ scope: '/p/beta', kind: 'binding', key: 'b', fact: 'beta fact' });
+    store.rememberFact({ scope: 'global', kind: 'preference', key: 'g', fact: 'global fact' });
+    store.rememberFact({ scope: '/p/alpha', kind: 'rule', key: 'a', fact: 'alpha fact' });
+    const all = store.listAllKnowledge();
+    expect(all.length).toBe(3);
+    expect(all.map((f) => f.fact).sort()).toEqual(['alpha fact', 'beta fact', 'global fact']);
+    expect(new Set(all.map((f) => f.scope))).toEqual(new Set(['global', '/p/alpha', '/p/beta']));
+  });
+
+  it('reflects supersede and forget', () => {
+    store.rememberFact({ scope: 'global', kind: 'preference', key: 'k', fact: 'v1' });
+    store.rememberFact({ scope: 'global', kind: 'preference', key: 'k', fact: 'v2' });
+    expect(store.listAllKnowledge().filter((f) => f.key === 'k').map((f) => f.fact)).toEqual(['v2']);
+    store.forgetFact('global', 'k');
+    expect(store.listAllKnowledge().some((f) => f.key === 'k')).toBe(false);
+  });
+});

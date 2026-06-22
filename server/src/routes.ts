@@ -381,6 +381,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     return { session_id: sessionId };
   });
 
+  // knowledge
+  app.get('/api/knowledge', async () => store.listAllKnowledge());
+
   // goals
   app.get('/api/goals', async () => store.listGoals());
   app.post<{ Body: { title?: string; expected_output?: string; acceptance?: string; project?: string; max_iterations?: number; qa_dimensions?: string[] } }>(

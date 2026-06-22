@@ -174,6 +174,8 @@ export class Store {
     getKnowledgeById: Database.Statement;
     searchKnowledge: Database.Statement;
     listAllKnowledge: Database.Statement;
+    getMinedSeq: Database.Statement;
+    setMinedSeq: Database.Statement;
   };
   // Compiled once, like the prepared statements above — atomic session delete
   // (events first, then the row).
@@ -234,6 +236,7 @@ export class Store {
       ['ended_at', `ALTER TABLE session ADD COLUMN ended_at INTEGER`],
       ['result', `ALTER TABLE session ADD COLUMN result TEXT`],
       ['cwd', `ALTER TABLE session ADD COLUMN cwd TEXT`],
+      ['mined_seq', `ALTER TABLE session ADD COLUMN mined_seq INTEGER NOT NULL DEFAULT 0`],
     ];
     for (const [name, sql] of additions) {
       if (!existing.has(name)) this.db.exec(sql);
@@ -386,6 +389,8 @@ export class Store {
       listAllKnowledge: db.prepare(
         `SELECT * FROM knowledge ORDER BY scope, kind, updated_at DESC`,
       ),
+      getMinedSeq: db.prepare(`SELECT mined_seq FROM session WHERE id = ?`),
+      setMinedSeq: db.prepare(`UPDATE session SET mined_seq = ? WHERE id = ?`),
     };
     this.deleteSessionTxn = db.transaction((sid: string) => {
       this.stmts.deleteEventsForSession.run(sid);
@@ -507,6 +512,16 @@ export class Store {
 
   setStatus(id: string, status: SessionStatus): void {
     this.stmts.setStatus.run(status, id);
+  }
+
+  /** Highwater seq the memory miner has already processed for a session. */
+  getMinedSeq(id: string): number {
+    const r = this.stmts.getMinedSeq.get(id) as { mined_seq: number } | undefined;
+    return r?.mined_seq ?? 0;
+  }
+
+  setMinedSeq(id: string, seq: number): void {
+    this.stmts.setMinedSeq.run(seq, id);
   }
 
   /** Replace the per-session disabled-tools set. Empty array clears it (null). */

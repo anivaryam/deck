@@ -60,7 +60,9 @@ export class MemoryMiner {
           const kind = (f.kind ?? '') as KnowledgeKind;
           if (!KINDS.has(kind)) continue;
           const scope = f.scope === 'global' ? 'global' : sess.project_path;
-          this.store.rememberFact({ scope, kind, key: f.key ?? null, fact: f.fact, sourceSession: sessionId });
+          // Empty-string key would create a degenerate row that supersedes on ""; treat as free-form.
+          const key = f.key && f.key.trim() ? f.key : null;
+          this.store.rememberFact({ scope, kind, key, fact: f.fact, sourceSession: sessionId });
           stored++;
         }
       } catch { /* extraction/model failure must not break mining */ }
@@ -112,18 +114,29 @@ export function renderTranscript(events: EventRow[]): string {
     }
   }
   const joined = lines.join('\n');
-  return joined.length > MAX_TRANSCRIPT ? joined.slice(joined.length - MAX_TRANSCRIPT) : joined;
+  if (joined.length <= MAX_TRANSCRIPT) return joined;
+  // Keep the most recent chars, but drop a partial leading line so the model
+  // never sees a mangled first entry.
+  const raw = joined.slice(joined.length - MAX_TRANSCRIPT);
+  const nl = raw.indexOf('\n');
+  return nl === -1 ? raw : raw.slice(nl + 1);
 }
 
-/** Parse a JSON array of facts from model text, tolerating fences/prose. */
+/** Parse a JSON array of facts from model text, tolerating fences/prose. Tries
+ *  progressively earlier closing brackets so a `]` inside a fact string doesn't
+ *  truncate (and silently drop) the whole array. */
 export function parseFacts(text: string): RawFact[] {
   const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
-  if (start === -1 || end === -1 || end < start) return [];
-  try {
-    const arr = JSON.parse(text.slice(start, end + 1));
-    return Array.isArray(arr) ? (arr as RawFact[]) : [];
-  } catch {
-    return [];
+  if (start === -1) return [];
+  let end = text.lastIndexOf(']');
+  while (end > start) {
+    try {
+      const arr = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(arr)) return arr as RawFact[];
+    } catch {
+      /* try an earlier closing bracket */
+    }
+    end = text.lastIndexOf(']', end - 1);
   }
+  return [];
 }

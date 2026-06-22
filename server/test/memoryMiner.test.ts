@@ -69,4 +69,19 @@ describe('MemoryMiner', () => {
     expect(await miner.mineSession(s.id)).toBe(0);
     expect(store.getMinedSeq(s.id)).toBeGreaterThan(0);
   });
+
+  it('parses facts even when a fact text contains a closing bracket', async () => {
+    const s = seed();
+    const json = JSON.stringify([{ scope: 'project', kind: 'convention', key: 'deploy', fact: 'use [Railway] for deploys' }]);
+    const miner = new MemoryMiner(store, cfg, fakeQuery(json));
+    expect(await miner.mineSession(s.id)).toBe(1);
+    expect(store.listAllKnowledge()[0].fact).toBe('use [Railway] for deploys');
+  });
+
+  it('treats an empty key as free-form (no degenerate empty-key row)', async () => {
+    const s = seed();
+    const miner = new MemoryMiner(store, cfg, fakeQuery(JSON.stringify([{ scope: 'project', kind: 'rule', key: '', fact: 'free form fact' }])));
+    expect(await miner.mineSession(s.id)).toBe(1);
+    expect(store.listAllKnowledge()[0].key).toBeNull();
+  });
 });

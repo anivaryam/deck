@@ -54,7 +54,11 @@ function resultText(content: any): string {
   let text = "";
   if (typeof content === "string") text = content;
   else if (Array.isArray(content)) {
-    text = content.map((b: any) => (typeof b === "string" ? b : (b?.text ?? ""))).join("");
+    text = content
+      .map((b: any) =>
+        typeof b === "string" ? b : b?.type === "image" ? "[image]" : (b?.text ?? ""),
+      )
+      .join("");
   }
   return text.trim();
 }
